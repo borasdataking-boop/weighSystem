@@ -76,9 +76,29 @@ webDesignUI/
 
 ---
 
-## 3. Cách Sử Dụng
+## 3. Hướng Dẫn Khởi Chạy Hệ Thống
 
-1. **Xem thử nhanh giao diện:** Mở trực tiếp file `weighStation.html` trên trình duyệt.
-2. **Khi đưa vào dự án chính (`management_weigh`):**
-   * Copy toàn bộ thư mục `src/components/stations/` sang `management_weigh/apps/web-dashboard/src/components/stations/`.
-   * Đặt trang chính vào `management_weigh/apps/web-dashboard/src/app/(tenant)/stations/page.tsx`.
+Dự án là một hệ thống Full-stack khép kín hoàn chỉnh nằm trọn trong thư mục `webDesignUI`:
+
+### Bước 1: Khởi động cơ sở dữ liệu (PostgreSQL)
+Đảm bảo dịch vụ PostgreSQL đang chạy:
+```bash
+brew services start postgresql@18
+# Khởi tạo DB & nạp dữ liệu mẫu (chỉ cần chạy lần đầu):
+npm run db:init
+npm run db:seed
+```
+
+### Bước 2: Chạy Backend API & TCP Socket
+```bash
+# Build & chạy server API (cổng 5001) và TCP IoT (cổng 8000):
+npm run server:build
+npm run server
+```
+
+### Bước 3: Chạy Frontend Dashboard
+```bash
+# Khởi chạy giao diện React Vite (cổng 3000):
+npm run dev
+```
+Truy cập giao diện tại: **`http://localhost:3000`**
