@@ -1,0 +1,2381 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản lý Sản phẩm - Phan Bach Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       DESIGN SYSTEM - TONE MÀU ĐỎ CHỦ ĐẠO & ĐỒNG BỘ 100% TRẠM CÂN & QUY TRÌNH
+       ========================================================================== */
+    :root {
+      /* Primary Red Palette */
+      --color-primary: #DE4444;
+      --color-primary-hover: #C93333;
+      --color-primary-active: #B22828;
+      --color-primary-light: #FDF2F2;
+      --color-primary-border: #F8B4B4;
+      --color-primary-subtle: rgba(222, 68, 68, 0.08);
+
+      /* Neutral Palette */
+      --color-bg: #F8FAFC;
+      --color-surface: #FFFFFF;
+      --color-surface-hover: #F8FAFC;
+      --color-border: #E2E8F0;
+      --color-border-subtle: #F1F5F9;
+
+      /* Text Colors */
+      --color-text-main: #0F172A;
+      --color-text-muted: #475569;
+      --color-text-light: #64748B;
+      --color-text-subtle: #94A3B8;
+
+      /* Status Colors */
+      --status-online-bg: #ECFDF5;
+      --status-online-text: #065F46;
+      --status-online-dot: #10B981;
+
+      --status-offline-bg: #F1F5F9;
+      --status-offline-text: #475569;
+      --status-offline-dot: #94A3B8;
+
+      --status-calib-bg: #FFFBEB;
+      --status-calib-text: #92400E;
+      --status-calib-dot: #F59E0B;
+
+      /* Product Types Palette */
+      --type-finished-bg: #ECFDF5;
+      --type-finished-text: #065F46;
+      --type-finished-border: #A7F3D0;
+
+      --type-semi-bg: #EFF6FF;
+      --type-semi-text: #1D4ED8;
+      --type-semi-border: #BFDBFE;
+
+      --type-byproduct-bg: #FFFBEB;
+      --type-byproduct-text: #B45309;
+      --type-byproduct-border: #FDE68A;
+
+      /* Typography */
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+      /* Elevation / Shadows */
+      --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
+      --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+
+      /* Layout */
+      --header-height: 64px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-full: 9999px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--color-bg);
+      color: var(--color-text-main);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ==========================================================================
+       HEADER - ĐÚNG CHUẨN ĐỒNG NHẤT (TAB 'SẢN PHẨM' ACTIVE)
+       ========================================================================== */
+    .app-header {
+      height: var(--header-height);
+      display: flex;
+      align-items: stretch;
+      background-color: var(--color-primary);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-brand {
+      width: 240px;
+      background-color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 16px;
+      text-decoration: none;
+      flex-shrink: 0;
+      border-right: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .brand-logo-frame {
+      width: 170px;
+      height: 28px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-logo-img {
+      position: absolute;
+      width: 220px;
+      max-width: none;
+      left: -40px;
+      top: -95px;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--color-text-light);
+      letter-spacing: 0.3px;
+      margin-top: 1px;
+      line-height: 1;
+    }
+
+    .header-nav {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 6px;
+      overflow-x: auto;
+    }
+
+    .nav-item {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 18px;
+      color: rgba(255, 255, 255, 0.9);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: var(--radius-sm);
+      transition: background-color 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      background-color: rgba(255, 255, 255, 0.12);
+      color: #FFFFFF;
+    }
+
+    .nav-item.active {
+      background-color: rgba(255, 255, 255, 0.22);
+      color: #FFFFFF;
+      font-weight: 600;
+    }
+
+    .header-user {
+      display: flex;
+      align-items: center;
+      padding: 0 20px 0 16px;
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .user-divider {
+      width: 1px;
+      height: 28px;
+      background-color: rgba(255, 255, 255, 0.25);
+      margin-right: 4px;
+    }
+
+    .user-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      line-height: 1.25;
+    }
+
+    .user-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #FFFFFF;
+    }
+
+    .user-role {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    .user-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-full);
+      object-fit: cover;
+      border: 2px solid rgba(255, 255, 255, 0.45);
+      background-color: #F1F5F9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .user-dropdown-btn {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: var(--radius-sm);
+      border: none;
+      color: #FFFFFF;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .user-dropdown-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    /* ==========================================================================
+       MAIN WORKSPACE (MAX-WIDTH 1440PX)
+       ========================================================================== */
+    .app-main {
+      flex: 1;
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 28px 48px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--color-text-light);
+      margin-bottom: 10px;
+    }
+
+    .breadcrumb a {
+      color: var(--color-text-light);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .breadcrumb a:hover {
+      color: var(--color-primary);
+    }
+
+    .breadcrumb-separator {
+      color: var(--color-text-subtle);
+    }
+
+    .breadcrumb-current {
+      color: var(--color-text-main);
+      font-weight: 600;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .page-title-group h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-text-main);
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .page-title-group p {
+      font-size: 14px;
+      color: var(--color-text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 42px;
+      padding: 0 18px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      text-decoration: none;
+      box-sizing: border-box;
+    }
+
+    .btn-primary {
+      background-color: var(--color-primary);
+      color: #FFFFFF;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .btn-primary:hover {
+      background-color: var(--color-primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: #FFFFFF;
+      color: var(--color-text-main);
+      border-color: var(--color-border);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--color-bg);
+      border-color: #CBD5E1;
+    }
+
+    .btn-danger {
+      background-color: #DC2626;
+      color: #FFFFFF;
+    }
+
+    .btn-danger:hover {
+      background-color: #B91C1C;
+    }
+
+    /* ==========================================================================
+       STATS GRID - 4 THẺ KPI CHUẨN
+       ========================================================================== */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: var(--shadow-xs);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 124px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .stat-card:hover {
+      box-shadow: var(--shadow-sm);
+      transform: translateY(-1px);
+    }
+
+    .stat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-light);
+    }
+
+    .stat-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--color-border-subtle);
+      color: var(--color-text-muted);
+    }
+
+    .stat-icon.primary {
+      background-color: var(--color-primary-light);
+      color: var(--color-primary);
+    }
+
+    .stat-icon.success {
+      background-color: var(--status-online-bg);
+      color: var(--status-online-text);
+    }
+
+    .stat-icon.blue {
+      background-color: #EFF6FF;
+      color: #1D4ED8;
+    }
+
+    .stat-icon.amber {
+      background-color: #FFFBEB;
+      color: #B45309;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--color-text-main);
+      line-height: 1.1;
+      margin-bottom: 6px;
+    }
+
+    .stat-hint {
+      font-size: 12px;
+      color: var(--color-text-light);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background-color: var(--status-online-bg);
+      color: var(--status-online-text);
+    }
+
+    /* ==========================================================================
+       CONTROLS PANEL & BỘ LỌC
+       ========================================================================== */
+    .controls-panel {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 12px 18px;
+      box-shadow: var(--shadow-xs);
+      margin-bottom: 20px;
+    }
+
+    .controls-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .view-mode-tabs {
+      display: inline-flex;
+      align-items: center;
+      background-color: var(--color-border-subtle);
+      padding: 2px;
+      border-radius: var(--radius-md);
+      gap: 4px;
+      height: 38px;
+      box-sizing: border-box;
+    }
+
+    .view-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+
+    .view-tab-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .view-tab-btn:hover {
+      color: var(--color-text-main);
+    }
+
+    .view-tab-btn.active {
+      background: #FFFFFF;
+      color: var(--color-primary);
+      box-shadow: var(--shadow-xs);
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      min-width: 280px;
+    }
+
+    .search-input-wrapper .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      color: var(--color-text-subtle);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: #FFFFFF;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--color-text-main);
+      transition: border-color 0.15s;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px var(--color-primary-subtle);
+    }
+
+    .filter-select {
+      height: 38px;
+      padding: 0 32px 0 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: #FFFFFF;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--color-text-main);
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+
+    .filter-select:focus {
+      outline: none;
+      border-color: var(--color-primary);
+    }
+
+    /* ==========================================================================
+       VIEW 1: BẢNG DANH SÁCH SẢN PHẨM (TABLE VIEW)
+       ========================================================================== */
+    .table-container {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xs);
+      overflow-x: auto;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      min-width: 900px;
+    }
+
+    .data-table th {
+      background-color: #F8FAFC;
+      padding: 13px 18px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text-light);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--color-border);
+      white-space: nowrap;
+    }
+
+    .data-table td {
+      padding: 14px 18px;
+      font-size: 13px;
+      color: var(--color-text-main);
+      border-bottom: 1px solid var(--color-border-subtle);
+      vertical-align: middle;
+    }
+
+    .data-table tbody tr:hover {
+      background-color: #FAFAFA;
+    }
+
+    .product-id-badge {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 12.5px;
+      color: var(--color-primary);
+      background-color: var(--color-primary-light);
+      padding: 5px 10px;
+      border-radius: var(--radius-md);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--color-primary-border);
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+
+    .stage-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      background-color: #F1F5F9;
+      color: #334155;
+      padding: 5px 10px;
+      border-radius: var(--radius-md);
+      border: 1px solid #CBD5E1;
+      white-space: nowrap;
+    }
+
+    .stage-code-pill {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: #1E293B;
+    }
+
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .type-badge.finished {
+      background-color: var(--type-finished-bg);
+      color: var(--type-finished-text);
+      border: 1px solid var(--type-finished-border);
+    }
+
+    .type-badge.semi {
+      background-color: var(--type-semi-bg);
+      color: var(--type-semi-text);
+      border: 1px solid var(--type-semi-border);
+    }
+
+    .type-badge.byproduct {
+      background-color: var(--type-byproduct-bg);
+      color: var(--type-byproduct-text);
+      border: 1px solid var(--type-byproduct-border);
+    }
+
+    .type-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .type-badge.finished .dot { background-color: #059669; }
+    .type-badge.semi .dot { background-color: #2563EB; }
+    .type-badge.byproduct .dot { background-color: #D97706; }
+
+    .unit-pill {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+      background-color: #F8FAFC;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-border);
+    }
+
+    .action-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn-icon-action {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background-color: #FFFFFF;
+      color: var(--color-text-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-sizing: border-box;
+    }
+
+    .btn-icon-action:hover {
+      background-color: #F1F5F9;
+      color: var(--color-text-main);
+      border-color: #CBD5E1;
+    }
+
+    .btn-icon-action.btn-delete:hover {
+      background-color: #FEF2F2;
+      color: #DC2626;
+      border-color: #FCA5A5;
+    }
+
+    /* ==========================================================================
+       VIEW 2: NHÓM THEO CÔNG ĐOẠN (STAGE GROUPED VIEW)
+       ========================================================================== */
+    .stage-grouped-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .stage-group-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .stage-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--color-border-subtle);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .stage-group-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .stage-group-title h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--color-text-main);
+    }
+
+    .stage-product-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text-light);
+      background-color: #F1F5F9;
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+    }
+
+    .stage-products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+    }
+
+    .product-mini-card {
+      background: #FFFFFF;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .product-mini-card:hover {
+      border-color: #CBD5E1;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .product-mini-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .product-mini-name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--color-text-main);
+      line-height: 1.3;
+    }
+
+    .product-mini-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 6px;
+      border-top: 1px dashed var(--color-border-subtle);
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      border: 1px dashed var(--color-border);
+      color: var(--color-text-light);
+    }
+
+    .empty-state-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 12px;
+      color: var(--color-text-subtle);
+    }
+
+    /* ==========================================================================
+       MODALS
+       ========================================================================== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+      animation: fadeIn 0.15s ease-out;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-window {
+      background-color: #FFFFFF;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-modal);
+      width: 100%;
+      max-width: 640px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      animation: zoomIn 0.15s ease-out;
+    }
+
+    @keyframes zoomIn {
+      from { transform: scale(0.97); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--color-border);
+      background-color: #FCFDFD;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-header-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--color-text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-close-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: none;
+      color: var(--color-text-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.15s, color 0.15s;
+    }
+
+    .modal-close-btn:hover {
+      background-color: #E2E8F0;
+      color: var(--color-text-main);
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .form-grid-2col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text-muted);
+    }
+
+    .form-label span.req {
+      color: var(--color-primary);
+    }
+
+    .form-input, .form-select-ctrl {
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--color-text-main);
+      background-color: #FFFFFF;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .form-input:focus, .form-select-ctrl:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px var(--color-primary-subtle);
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      background-color: #F8FAFC;
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    .modal-sm {
+      max-width: 440px;
+    }
+
+    /* Toast */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    .toast-item {
+      pointer-events: auto;
+      background-color: #0F172A;
+      color: #FFFFFF;
+      padding: 12px 18px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--shadow-lg);
+      animation: slideUp 0.2s ease-out;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(12px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       HEADER THANH ĐIỀU HƯỚNG CHÍNH (TAB SẢN PHẨM ACTIVE)
+       ========================================================================== -->
+  <header class="app-header">
+    <a href="weighStation.html" class="header-brand" title="Quản lý Trạm Cân & Sản Phẩm Phan Bách">
+      <div class="brand-logo-frame">
+        <img src="logo.png" alt="Phan Bách" class="brand-logo-img">
+      </div>
+      <span class="brand-subtitle">Management System</span>
+    </a>
+
+    <nav class="header-nav">
+      <div class="nav-item" onclick="switchNav('overview')">Tổng quan</div>
+      <div class="nav-item" onclick="switchNav('weighStation')">Trạm cân</div>
+      <div class="nav-item" onclick="switchNav('process')">Quy trình</div>
+      <div class="nav-item active" onclick="switchNav('products')">Sản phẩm</div>
+      <div class="nav-item" onclick="switchNav('hr')">Nhân sự</div>
+      <div class="nav-item" onclick="switchNav('reports')">Báo cáo</div>
+    </nav>
+
+    <div class="header-user">
+      <div class="user-divider"></div>
+      <div class="user-meta">
+        <span class="user-name">Nguyễn Minh Anh</span>
+        <span class="user-role">Quản trị viên</span>
+      </div>
+      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80" alt="Avatar" class="user-avatar">
+      <button class="user-dropdown-btn" title="Tùy chọn tài khoản">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       NỘI DUNG CHÍNH (MAIN WORKSPACE)
+       ========================================================================== -->
+  <main class="app-main">
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+      <a href="weighStation.html">Hệ thống</a>
+      <span class="breadcrumb-separator">/</span>
+      <span class="breadcrumb-current">Quản lý sản phẩm</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-title-group">
+        <h1>Quản lý sản phẩm</h1>
+        <p>Danh mục sản phẩm, bán thành phẩm và phụ phẩm theo từng công đoạn chế biến.</p>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="openAddProductModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Thêm sản phẩm
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Grid: 4 Thẻ KPI -->
+    <div class="stats-grid">
+      <!-- Thẻ 1: Tổng số sản phẩm -->
+      <div class="stat-card">
+        <div>
+          <div class="stat-header">
+            <span class="stat-label">Tổng số sản phẩm</span>
+            <div class="stat-icon primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-value" id="kpi-total-products">0</div>
+        </div>
+        <div class="stat-hint">
+          <span>Danh mục sản phẩm toàn xưởng</span>
+        </div>
+      </div>
+
+      <!-- Thẻ 2: Công đoạn có sản phẩm -->
+      <div class="stat-card">
+        <div>
+          <div class="stat-header">
+            <span class="stat-label">Công đoạn có sản phẩm</span>
+            <div class="stat-icon success">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-value" id="kpi-stages-with-products">0/0</div>
+        </div>
+        <div class="stat-hint">
+          <span class="stat-badge" id="kpi-stages-badge">100% có sản phẩm</span>
+          <span>TB 2-3 SP/khâu</span>
+        </div>
+      </div>
+
+      <!-- Thẻ 3: Bán thành phẩm -->
+      <div class="stat-card">
+        <div>
+          <div class="stat-header">
+            <span class="stat-label">Bán thành phẩm</span>
+            <div class="stat-icon blue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-value" id="kpi-semi-products">0</div>
+        </div>
+        <div class="stat-hint">
+          <span>Đầu ra trung gian giữa các khâu</span>
+        </div>
+      </div>
+
+      <!-- Thẻ 4: Thành phẩm xuất xưởng -->
+      <div class="stat-card">
+        <div>
+          <div class="stat-header">
+            <span class="stat-label">Thành phẩm xuất xưởng</span>
+            <div class="stat-icon amber">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 8h14M5 8a2 2 0 1 1 0-4h14a2 2 0 1 1 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8m-9 4h4"></path>
+              </svg>
+            </div>
+          </div>
+          <div class="stat-value" id="kpi-finished-products">0</div>
+        </div>
+        <div class="stat-hint">
+          <span>Đóng gói hoàn chỉnh nhập kho</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Panel & Bộ lọc -->
+    <div class="controls-panel">
+      <div class="controls-top-row">
+        <!-- Chuyển tab chế độ xem -->
+        <div class="view-mode-tabs">
+          <button type="button" class="view-tab-btn active" id="btn-view-table" onclick="setViewMode('table')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+            Danh sách sản phẩm
+          </button>
+          <button type="button" class="view-tab-btn" id="btn-view-grouped" onclick="setViewMode('grouped')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            Xem theo công đoạn
+          </button>
+        </div>
+
+        <!-- Tìm kiếm & Bộ lọc -->
+        <div class="filter-group">
+          <div class="search-input-wrapper">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="search-input"
+              class="search-input"
+              placeholder="Tìm mã sản phẩm, tên sản phẩm, công đoạn..."
+              oninput="handleSearch(this.value)"
+            >
+          </div>
+
+          <!-- Lọc theo công đoạn -->
+          <select id="filter-stage" class="filter-select" onchange="handleFilterStage(this.value)">
+            <option value="">Tất cả công đoạn</option>
+          </select>
+
+          <!-- Lọc theo phân loại -->
+          <select id="filter-type" class="filter-select" onchange="handleFilterType(this.value)">
+            <option value="">Tất cả phân loại</option>
+            <option value="SEMI">Bán thành phẩm</option>
+            <option value="FINISHED">Thành phẩm</option>
+            <option value="BYPRODUCT">Phụ phẩm</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 1: BẢNG DANH SÁCH SẢN PHẨM -->
+    <div id="table-view-container" class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 140px;">Mã Sản Phẩm</th>
+            <th style="width: 260px;">Tên Sản Phẩm</th>
+            <th style="width: 230px;">Công Đoạn Tạo Ra</th>
+            <th style="width: 150px;">Phân Loại</th>
+            <th style="width: 110px;">Đơn Vị Tính</th>
+            <th>Quy Cách / Ghi Chú</th>
+            <th style="width: 100px; text-align: right;">Thao Tác</th>
+          </tr>
+        </thead>
+        <tbody id="products-table-body">
+          <!-- Render tự động qua JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- VIEW 2: NHÓM THEO CÔNG ĐOẠN -->
+    <div id="grouped-view-container" class="stage-grouped-container" style="display: none;">
+      <!-- Render tự động qua JS -->
+    </div>
+
+  </main>
+
+  <!-- ==========================================================================
+       MODAL 1: THÊM / CHỈNH SỬA / ĐỔI TÊN SẢN PHẨM
+       ========================================================================== -->
+  <div class="modal-overlay" id="product-modal" onclick="handleModalBackdropClick(event, 'product-modal')">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 class="modal-header-title" id="product-modal-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          </svg>
+          Thêm sản phẩm
+        </h3>
+        <button class="modal-close-btn" onclick="closeModal('product-modal')" title="Đóng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <form id="product-form" onsubmit="handleSaveProduct(event)">
+        <input type="hidden" id="form-product-edit-id" value="">
+        <div class="modal-body">
+          <div class="form-grid-2col">
+            <div class="form-group">
+              <label class="form-label" for="form-product-id">Mã Sản Phẩm <span class="req">*</span></label>
+              <input type="text" id="form-product-id" class="form-input" required placeholder="SP-CD001-01" style="font-family: var(--font-mono); font-weight: 700; color: #DE4444; background-color: #FEF2F2; border-color: #FECACA;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="form-product-unit">Đơn Vị Tính <span class="req">*</span></label>
+              <select id="form-product-unit" class="form-select-ctrl">
+                <option value="kg">kg (Kilogram)</option>
+                <option value="khay">Khay</option>
+                <option value="túi">Túi</option>
+                <option value="thùng">Thùng</option>
+                <option value="rổ">Rổ</option>
+                <option value="pallet">Pallet</option>
+                <option value="con">Con</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="form-product-name">Tên Sản Phẩm <span class="req">*</span></label>
+            <input type="text" id="form-product-name" class="form-input" required placeholder="Ví dụ: Tôm thẻ thịt PTO rút chỉ">
+          </div>
+
+          <div class="form-grid-2col">
+            <div class="form-group">
+              <label class="form-label" for="form-product-stage">Công Đoạn Tạo Ra <span class="req">*</span></label>
+              <select id="form-product-stage" class="form-select-ctrl" required>
+                <!-- Render tự động từ danh sách công đoạn -->
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="form-product-type">Phân Loại <span class="req">*</span></label>
+              <select id="form-product-type" class="form-select-ctrl">
+                <option value="SEMI">Bán thành phẩm</option>
+                <option value="FINISHED">Thành phẩm xuất xưởng</option>
+                <option value="BYPRODUCT">Phụ phẩm / Thu hồi</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="form-product-spec">Quy cách / Ghi chú</label>
+            <input type="text" id="form-product-spec" class="form-input" placeholder="Ví dụ: Size 26/30, xếp khay 500g hoặc ghi chú mẻ">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('product-modal')">Hủy bỏ</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-product">Lưu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 2: XÁC NHẬN XOÁ SẢN PHẨM
+       ========================================================================== -->
+  <div class="modal-overlay" id="delete-product-modal" onclick="handleModalBackdropClick(event, 'delete-product-modal')">
+    <div class="modal-window modal-sm">
+      <div class="modal-header">
+        <h3 class="modal-header-title">Xác nhận xoá sản phẩm</h3>
+        <button class="modal-close-btn" onclick="closeModal('delete-product-modal')" title="Đóng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body" style="gap: 12px;">
+        <p style="font-size: 14px; color: var(--color-text-main); line-height: 1.5;">
+          Bạn có chắc chắn muốn xoá sản phẩm <strong id="delete-product-label" style="color: #DC2626;"></strong> khỏi hệ thống?
+        </p>
+        <p style="font-size: 12px; color: var(--color-text-muted);">
+          Dữ liệu log cân lịch sử gắn với mã này vẫn được lưu trữ, nhưng sản phẩm sẽ không còn xuất hiện trong danh mục phân bổ hiện tại.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('delete-product-modal')">Hủy bỏ</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-delete-product" onclick="handleConfirmDeleteProduct()">
+          Xoá sản phẩm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast thông báo -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ==========================================================================
+       JAVASCRIPT LOGIC
+       ========================================================================== -->
+  <script>
+    // 15 Công đoạn chuẩn đồng bộ từ hệ thống
+    const DEFAULT_PROCESS_STAGES = [
+      { id: 'CD001', name: 'Tiếp nhận tôm' },
+      { id: 'CD002', name: 'Phân cỡ & Phân loại' },
+      { id: 'CD003', name: 'Xếp khuôn & Chia mẻ' },
+      { id: 'CD004', name: 'Bóc vỏ & Rút chỉ' },
+      { id: 'CD005', name: 'Ngâm phụ gia' },
+      { id: 'CD006', name: 'Định hình Nobashi / Butterfly' },
+      { id: 'CD007', name: 'Cấp đông IQF' },
+      { id: 'CD008', name: 'Cân & Mạ băng' },
+      { id: 'CD009', name: 'Chiên / Luộc sơ bộ' },
+      { id: 'CD010', name: 'Hấp chín' },
+      { id: 'CD011', name: 'Cấp đông tái hồi' },
+      { id: 'CD012', name: 'Đóng gói hút chân không' },
+      { id: 'CD013', name: 'Rà kim loại' },
+      { id: 'CD014', name: 'Đóng thùng carton' },
+      { id: 'CD015', name: 'Kho bảo quản đông lạnh' }
+    ];
+
+    // Dữ liệu sản phẩm thực tế: mỗi công đoạn có từ 2 đến 3 sản phẩm
+    const DEFAULT_PRODUCTS = [
+      // CD001: Tiếp nhận tôm
+      {
+        id: 'SP-TN-01',
+        name: 'Tôm nguyên liệu đạt chuẩn',
+        stageId: 'CD001',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Tôm sống bảo quản đá lạnh'
+      },
+      {
+        id: 'SP-TN-02',
+        name: 'Tôm thứ phẩm / Dập nát',
+        stageId: 'CD001',
+        type: 'BYPRODUCT',
+        unit: 'kg',
+        spec: 'Phân loại bán nguyên liệu nội địa'
+      },
+
+      // CD002: Phân cỡ & Phân loại
+      {
+        id: 'SP-PC-01',
+        name: 'Tôm thẻ phân cỡ lớn (size 20-25)',
+        stageId: 'CD002',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Cỡ lớn chuẩn hàng xuất'
+      },
+      {
+        id: 'SP-PC-02',
+        name: 'Tôm thẻ phân cỡ vừa (size 30-40)',
+        stageId: 'CD002',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Cỡ phổ thông chế biến tôm thịt'
+      },
+      {
+        id: 'SP-PC-03',
+        name: 'Tôm dạt gãy thân',
+        stageId: 'CD002',
+        type: 'BYPRODUCT',
+        unit: 'kg',
+        spec: 'Tách riêng chuyển ép bánh / thức ăn'
+      },
+
+      // CD003: Xếp khuôn & Chia mẻ
+      {
+        id: 'SP-XK-01',
+        name: 'Block tôm xếp khuôn 2kg',
+        stageId: 'CD003',
+        type: 'SEMI',
+        unit: 'khay',
+        spec: 'Định lượng khuôn 2kg/khay'
+      },
+      {
+        id: 'SP-XK-02',
+        name: 'Mẻ tôm rổ chuyển bóc vỏ',
+        stageId: 'CD003',
+        type: 'SEMI',
+        unit: 'rổ',
+        spec: 'Rổ nhựa chuyên dụng 10kg'
+      },
+
+      // CD004: Bóc vỏ & Rút chỉ
+      {
+        id: 'SP-BV-01',
+        name: 'Tôm thịt PTO rút chỉ',
+        stageId: 'CD004',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Còn đuôi, sạch chỉ lưng'
+      },
+      {
+        id: 'SP-BV-02',
+        name: 'Tôm thịt PUD lột sạch',
+        stageId: 'CD004',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Bóc sạch toàn bộ vỏ và đuôi'
+      },
+      {
+        id: 'SP-BV-03',
+        name: 'Vỏ và đầu tôm thu hồi',
+        stageId: 'CD004',
+        type: 'BYPRODUCT',
+        unit: 'kg',
+        spec: 'Thu hồi bán cho xưởng chiết xuất chitin'
+      },
+
+      // CD005: Ngâm phụ gia
+      {
+        id: 'SP-PG-01',
+        name: 'Tôm ngâm Non-Phosphate đạt trọng',
+        stageId: 'CD005',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Tăng trọng chuẩn kiểm soát 8-10%'
+      },
+      {
+        id: 'SP-PG-02',
+        name: 'Tôm ngâm STPP đạt chuẩn',
+        stageId: 'CD005',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Quy cách xuất khẩu thị trường Á'
+      },
+
+      // CD006: Định hình Nobashi / Butterfly
+      {
+        id: 'SP-DH-01',
+        name: 'Tôm duỗi Nobashi khay',
+        stageId: 'CD006',
+        type: 'SEMI',
+        unit: 'khay',
+        spec: 'Kéo duỗi chiều dài chuẩn 30 con/khay'
+      },
+      {
+        id: 'SP-DH-02',
+        name: 'Tôm xẻ bướm Butterfly',
+        stageId: 'CD006',
+        type: 'SEMI',
+        unit: 'khay',
+        spec: 'Xẻ lưng tạo hình cánh bướm'
+      },
+
+      // CD007: Cấp đông IQF
+      {
+        id: 'SP-IQF-01',
+        name: 'Tôm đông rời IQF bán thành phẩm',
+        stageId: 'CD007',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Đông cực nhanh tâm âm 18 độ C'
+      },
+      {
+        id: 'SP-IQF-02',
+        name: 'Vụn tôm đông lạnh thu gom',
+        stageId: 'CD007',
+        type: 'BYPRODUCT',
+        unit: 'kg',
+        spec: 'Tách vụn rơi tại băng chuyền'
+      },
+
+      // CD008: Cân & Mạ băng
+      {
+        id: 'SP-MB-01',
+        name: 'Tôm mạ băng tỷ lệ 10%',
+        stageId: 'CD008',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Lớp băng mỏng bảo vệ thân'
+      },
+      {
+        id: 'SP-MB-02',
+        name: 'Tôm mạ băng tỷ lệ 20%',
+        stageId: 'CD008',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Mạ băng 2 lần đạt tỷ lệ hợp đồng'
+      },
+
+      // CD009: Chiên / Luộc sơ bộ
+      {
+        id: 'SP-CL-01',
+        name: 'Tôm tẩm bột sơ chiên',
+        stageId: 'CD009',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Áo lớp bột tempura chiên vàng 30 giây'
+      },
+      {
+        id: 'SP-CL-02',
+        name: 'Tôm chần sơ nước sôi',
+        stageId: 'CD009',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Chần giữ màu đỏ tự nhiên'
+      },
+
+      // CD010: Hấp chín
+      {
+        id: 'SP-HC-01',
+        name: 'Tôm hấp chín nguyên con HOSO',
+        stageId: 'CD010',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Nhiệt độ tâm tôm đạt trên 85 độ C'
+      },
+      {
+        id: 'SP-HC-02',
+        name: 'Tôm thịt chín lột sẵn Cooked PUD',
+        stageId: 'CD010',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Thịt chín mọng nước làm salad'
+      },
+
+      // CD011: Cấp đông tái hồi
+      {
+        id: 'SP-TH-01',
+        name: 'Tôm chín đông tái hồi',
+        stageId: 'CD011',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Hạ nhiệt cấp tốc sau khâu hấp'
+      },
+      {
+        id: 'SP-TH-02',
+        name: 'Tôm chiên đông tái hồi',
+        stageId: 'CD011',
+        type: 'SEMI',
+        unit: 'kg',
+        spec: 'Đông cứng định hình lớp bột giòn'
+      },
+
+      // CD012: Đóng gói hút chân không
+      {
+        id: 'SP-DG-01',
+        name: 'Túi tôm chân không 500g',
+        stageId: 'CD012',
+        type: 'SEMI',
+        unit: 'túi',
+        spec: 'Bao bì PA/PE ép kín mép 500g'
+      },
+      {
+        id: 'SP-DG-02',
+        name: 'Khay tôm dán màng PE 1kg',
+        stageId: 'CD012',
+        type: 'SEMI',
+        unit: 'khay',
+        spec: 'Khay xốp dán màng thực phẩm'
+      },
+
+      // CD013: Rà kim loại
+      {
+        id: 'SP-RK-01',
+        name: 'Gói tôm đạt chuẩn rà kim loại',
+        stageId: 'CD013',
+        type: 'SEMI',
+        unit: 'túi',
+        spec: 'Qua máy dò từ Fe 1.0mm, Sus 1.5mm'
+      },
+      {
+        id: 'SP-RK-02',
+        name: 'Gói tôm cảnh báo nhiễm dị vật',
+        stageId: 'CD013',
+        type: 'BYPRODUCT',
+        unit: 'túi',
+        spec: 'Cách ly kiểm tra lại thủ công'
+      },
+
+      // CD014: Đóng thùng carton
+      {
+        id: 'SP-CT-01',
+        name: 'Thùng carton tôm Nobashi 10kg',
+        stageId: 'CD014',
+        type: 'FINISHED',
+        unit: 'thùng',
+        spec: 'Quy cách: 20 khay x 500g / thùng'
+      },
+      {
+        id: 'SP-CT-02',
+        name: 'Thùng carton tôm chín HOSO 12kg',
+        stageId: 'CD014',
+        type: 'FINISHED',
+        unit: 'thùng',
+        spec: 'Quy cách: 6 hộp x 2kg / thùng'
+      },
+      {
+        id: 'SP-CT-03',
+        name: 'Thùng carton tôm tempura chiên 8kg',
+        stageId: 'CD014',
+        type: 'FINISHED',
+        unit: 'thùng',
+        spec: 'Quy cách: 16 khay x 500g / thùng'
+      },
+
+      // CD015: Kho bảo quản đông lạnh
+      {
+        id: 'SP-KHO-01',
+        name: 'Pallet tôm đông xuất khẩu EU',
+        stageId: 'CD015',
+        type: 'FINISHED',
+        unit: 'pallet',
+        spec: '60 thùng/pallet, quấn màng co đạt chuẩn EU'
+      },
+      {
+        id: 'SP-KHO-02',
+        name: 'Pallet tôm đông xuất khẩu Nhật Bản',
+        stageId: 'CD015',
+        type: 'FINISHED',
+        unit: 'pallet',
+        spec: '50 thùng/pallet, tem dán truy xuất nguồn gốc'
+      },
+      {
+        id: 'SP-KHO-03',
+        name: 'Thùng tôm trữ kho nội địa',
+        stageId: 'CD015',
+        type: 'FINISHED',
+        unit: 'thùng',
+        spec: 'Lưu kho phân phối siêu thị'
+      }
+    ];
+
+    // State
+    let productsData = [];
+    let stagesData = [];
+    let currentViewMode = 'table'; // 'table' | 'grouped'
+    let currentSearchTerm = '';
+    let currentFilterStage = '';
+    let currentFilterType = '';
+    let pendingDeleteProductId = null;
+
+    // Khởi tạo
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStagesData();
+      loadProductsData();
+      populateStageDropdowns();
+      renderAll();
+    });
+
+    function loadStagesData() {
+      const saved = localStorage.getItem('pb_process_stages_v3') || localStorage.getItem('pms_process_stages');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            stagesData = parsed;
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      stagesData = [...DEFAULT_PROCESS_STAGES];
+    }
+
+    function loadProductsData() {
+      const saved = localStorage.getItem('pms_products_data');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            productsData = parsed;
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      productsData = [...DEFAULT_PRODUCTS];
+      saveProductsData();
+    }
+
+    function saveProductsData() {
+      localStorage.setItem('pms_products_data', JSON.stringify(productsData));
+    }
+
+    function populateStageDropdowns() {
+      const filterSelect = document.getElementById('filter-stage');
+      const formSelect = document.getElementById('form-product-stage');
+
+      const stageOptionsHtml = stagesData.map(st => `
+        <option value="${st.id}">[${st.id}] ${st.name}</option>
+      `).join('');
+
+      filterSelect.innerHTML = '<option value="">Tất cả công đoạn</option>' + stageOptionsHtml;
+      formSelect.innerHTML = stageOptionsHtml;
+    }
+
+    function getStageInfo(stageId) {
+      return stagesData.find(s => s.id === stageId) || { id: stageId, name: 'Công đoạn không xác định' };
+    }
+
+    function renderAll() {
+      renderKPICards();
+      if (currentViewMode === 'table') {
+        renderTable();
+      } else {
+        renderGroupedView();
+      }
+    }
+
+    // Render KPI
+    function renderKPICards() {
+      const total = productsData.length;
+      document.getElementById('kpi-total-products').textContent = total;
+
+      const stagesWithProduct = new Set(productsData.map(p => p.stageId));
+      const coveredCount = stagesData.filter(st => stagesWithProduct.has(st.id)).length;
+      document.getElementById('kpi-stages-with-products').textContent = `${coveredCount}/${stagesData.length}`;
+
+      const pct = stagesData.length > 0 ? Math.round((coveredCount / stagesData.length) * 100) : 0;
+      document.getElementById('kpi-stages-badge').textContent = `${pct}% có sản phẩm`;
+
+      const semiCount = productsData.filter(p => p.type === 'SEMI').length;
+      document.getElementById('kpi-semi-products').textContent = `${semiCount} mặt hàng`;
+
+      const finishedCount = productsData.filter(p => p.type === 'FINISHED').length;
+      document.getElementById('kpi-finished-products').textContent = `${finishedCount} mặt hàng`;
+    }
+
+    function getFilteredProducts() {
+      return productsData.filter(p => {
+        if (currentSearchTerm) {
+          const term = currentSearchTerm.toLowerCase();
+          const matchId = (p.id || '').toLowerCase().includes(term);
+          const matchName = (p.name || '').toLowerCase().includes(term);
+          const stage = getStageInfo(p.stageId);
+          const matchStage = (stage.name || '').toLowerCase().includes(term) || (stage.id || '').toLowerCase().includes(term);
+          const matchSpec = (p.spec || '').toLowerCase().includes(term);
+          if (!matchId && !matchName && !matchStage && !matchSpec) return false;
+        }
+
+        if (currentFilterStage && p.stageId !== currentFilterStage) {
+          return false;
+        }
+
+        if (currentFilterType && p.type !== currentFilterType) {
+          return false;
+        }
+
+        return true;
+      });
+    }
+
+    // Render Bảng
+    function renderTable() {
+      const tbody = document.getElementById('products-table-body');
+      const filtered = getFilteredProducts();
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">
+                <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                <div style="font-weight: 600; margin-bottom: 4px;">Không tìm thấy sản phẩm nào</div>
+                <div style="font-size: 13px;">Thử đổi từ khoá tìm kiếm hoặc bấm 'Thêm sản phẩm' để tạo mới.</div>
+              </div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(p => {
+        const stage = getStageInfo(p.stageId);
+        const typeBadge = getTypeBadgeHtml(p.type);
+
+        return `
+          <tr>
+            <td>
+              <span class="product-id-badge">${escapeHtml(p.id)}</span>
+            </td>
+            <td>
+              <div style="font-weight: 600; color: var(--color-text-main);">${escapeHtml(p.name)}</div>
+            </td>
+            <td>
+              <span class="stage-badge" title="${escapeHtml(stage.name)}">
+                <span class="stage-code-pill">${escapeHtml(stage.id)}</span>
+                <span>${escapeHtml(stage.name)}</span>
+              </span>
+            </td>
+            <td>${typeBadge}</td>
+            <td>
+              <span class="unit-pill">${escapeHtml(p.unit || 'kg')}</span>
+            </td>
+            <td style="color: var(--color-text-muted); font-size: 12.5px;">
+              ${escapeHtml(p.spec || '—')}
+            </td>
+            <td style="text-align: right;">
+              <div class="action-btn-group">
+                <button
+                  type="button"
+                  class="btn-icon-action"
+                  onclick="openEditProductModal(decodeURIComponent('${encodeURIComponent(p.id)}'))"
+                  title="Sửa / Đổi tên sản phẩm"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="btn-icon-action btn-delete"
+                  onclick="openDeleteProductModal(decodeURIComponent('${encodeURIComponent(p.id)}'))"
+                  title="Xoá sản phẩm"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Render Chế độ theo công đoạn
+    function renderGroupedView() {
+      const container = document.getElementById('grouped-view-container');
+      const filtered = getFilteredProducts();
+
+      // Gom theo công đoạn
+      const stagesToShow = stagesData.filter(st => {
+        if (currentFilterStage && st.id !== currentFilterStage) return false;
+        return true;
+      });
+
+      const stageIdSet = new Set(stagesData.map(s => s.id));
+      const orphanedProds = filtered.filter(p => !stageIdSet.has(p.stageId));
+
+      if (stagesToShow.length === 0 && orphanedProds.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div style="font-weight: 600;">Không có công đoạn phù hợp bộ lọc</div>
+          </div>
+        `;
+        return;
+      }
+
+      let groupsHtml = stagesToShow.map(st => {
+        const stageProds = filtered.filter(p => p.stageId === st.id);
+
+        return `
+          <div class="stage-group-card">
+            <div class="stage-group-header">
+              <div class="stage-group-title">
+                <span class="product-id-badge" style="background-color: #F1F5F9; color: #1E293B; border-color: #CBD5E1;">${escapeHtml(st.id)}</span>
+                <h3>${escapeHtml(st.name)}</h3>
+                <span class="stage-product-count">${stageProds.length} sản phẩm</span>
+              </div>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                style="height: 32px; font-size: 12px; padding: 0 12px;"
+                onclick="openAddProductModalForStage(decodeURIComponent('${encodeURIComponent(st.id)}'))"
+              >
+                + Thêm SP vào khâu này
+              </button>
+            </div>
+
+            ${stageProds.length === 0 ? `
+              <div style="font-size: 13px; color: var(--color-text-subtle); font-style: italic; padding: 12px 0;">
+                Chưa có sản phẩm nào thuộc công đoạn này.
+              </div>
+            ` : `
+              <div class="stage-products-grid">
+                ${stageProds.map(p => `
+                  <div class="product-mini-card">
+                    <div class="product-mini-top">
+                      <div>
+                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                          <span class="product-id-badge" style="font-size: 11px; padding: 2px 6px;">${escapeHtml(p.id)}</span>
+                          ${getTypeBadgeHtml(p.type)}
+                        </div>
+                        <div class="product-mini-name">${escapeHtml(p.name)}</div>
+                      </div>
+                      <div class="action-btn-group">
+                        <button
+                          type="button"
+                          class="btn-icon-action"
+                          style="width: 30px; height: 30px;"
+                          onclick="openEditProductModal(decodeURIComponent('${encodeURIComponent(p.id)}'))"
+                          title="Sửa / Đổi tên"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-icon-action btn-delete"
+                          style="width: 30px; height: 30px;"
+                          onclick="openDeleteProductModal(decodeURIComponent('${encodeURIComponent(p.id)}'))"
+                          title="Xoá sản phẩm"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="product-mini-meta">
+                      <span>ĐVT: <strong>${escapeHtml(p.unit || 'kg')}</strong></span>
+                      <span style="max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(p.spec || '—')}</span>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        `;
+      }).join('');
+
+      // Hiển thị sản phẩm mồ côi (nếu công đoạn đã bị xoá)
+      if (orphanedProds.length > 0 && !currentFilterStage) {
+        groupsHtml += `
+          <div class="stage-group-card" style="border-left: 4px solid #F59E0B;">
+            <div class="stage-group-header">
+              <div class="stage-group-title">
+                <span class="product-id-badge" style="background-color: #FEF3C7; color: #92400E; border-color: #FCD34D;">CHƯA GÁN</span>
+                <h3>Công đoạn đã xoá hoặc chưa xác định</h3>
+                <span class="stage-product-count">${orphanedProds.length} sản phẩm</span>
+              </div>
+            </div>
+            <div class="stage-products-grid">
+              ${orphanedProds.map(p => `
+                <div class="product-mini-card" style="border-color: #FCD34D;">
+                  <div class="product-mini-top">
+                    <div>
+                      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <span class="product-id-badge" style="font-size: 11px; padding: 2px 6px;">${escapeHtml(p.id)}</span>
+                        ${getTypeBadgeHtml(p.type)}
+                      </div>
+                      <div class="product-mini-name">${escapeHtml(p.name)}</div>
+                    </div>
+                    <div class="action-btn-group">
+                      <button
+                        type="button"
+                        class="btn-icon-action"
+                        style="width: 30px; height: 30px;"
+                        onclick="openEditProductModal(decodeURIComponent('${encodeURIComponent(p.id)}'))"
+                        title="Đổi công đoạn / Đổi tên"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-icon-action btn-delete"
+                        style="width: 30px; height: 30px;"
+                        onclick="openDeleteProductModal(decodeURIComponent('${encodeURIComponent(p.id)}'))"
+                        title="Xoá sản phẩm"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="product-mini-meta">
+                    <span style="color: #B45309;">Khâu cũ: <strong>${escapeHtml(p.stageId)}</strong></span>
+                    <span>ĐVT: <strong>${escapeHtml(p.unit || 'kg')}</strong></span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = groupsHtml;
+    }
+
+    function getTypeBadgeHtml(type) {
+      if (type === 'FINISHED') {
+        return `<span class="type-badge finished"><span class="dot"></span>Thành phẩm</span>`;
+      }
+      if (type === 'BYPRODUCT') {
+        return `<span class="type-badge byproduct"><span class="dot"></span>Phụ phẩm</span>`;
+      }
+      return `<span class="type-badge semi"><span class="dot"></span>Bán thành phẩm</span>`;
+    }
+
+    // Chuyển view mode
+    function setViewMode(mode) {
+      currentViewMode = mode;
+      const btnTable = document.getElementById('btn-view-table');
+      const btnGrouped = document.getElementById('btn-view-grouped');
+      const tableContainer = document.getElementById('table-view-container');
+      const groupedContainer = document.getElementById('grouped-view-container');
+
+      if (mode === 'table') {
+        btnTable.classList.add('active');
+        btnGrouped.classList.remove('active');
+        tableContainer.style.display = 'block';
+        groupedContainer.style.display = 'none';
+        renderTable();
+      } else {
+        btnTable.classList.remove('active');
+        btnGrouped.classList.add('active');
+        tableContainer.style.display = 'none';
+        groupedContainer.style.display = 'flex';
+        renderGroupedView();
+      }
+    }
+
+    // Xử lý tìm kiếm và bộ lọc
+    function handleSearch(term) {
+      currentSearchTerm = term;
+      renderAll();
+    }
+
+    function handleFilterStage(stageId) {
+      currentFilterStage = stageId;
+      renderAll();
+    }
+
+    function handleFilterType(type) {
+      currentFilterType = type;
+      renderAll();
+    }
+
+    // Modal Thêm / Sửa
+    function openAddProductModal() {
+      document.getElementById('product-form').reset();
+      document.getElementById('form-product-edit-id').value = '';
+      document.getElementById('product-modal-title').innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        </svg>
+        Thêm sản phẩm
+      `;
+      document.getElementById('btn-submit-product').textContent = 'Lưu';
+      document.getElementById('form-product-id').disabled = false;
+
+      // Sinh mã gợi ý
+      const count = productsData.length + 1;
+      document.getElementById('form-product-id').value = `SP-NEW-${String(count).padStart(2, '0')}`;
+
+      openModal('product-modal');
+    }
+
+    function openAddProductModalForStage(stageId) {
+      openAddProductModal();
+      document.getElementById('form-product-stage').value = stageId;
+      const count = productsData.filter(p => p.stageId === stageId).length + 1;
+      document.getElementById('form-product-id').value = `SP-${stageId}-${String(count).padStart(2, '0')}`;
+    }
+
+    function openEditProductModal(productId) {
+      const product = productsData.find(p => p.id === productId);
+      if (!product) return;
+
+      document.getElementById('product-form').reset();
+      document.getElementById('form-product-edit-id').value = product.id;
+      document.getElementById('product-modal-title').innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+        Chỉnh sửa / Đổi tên sản phẩm
+      `;
+      document.getElementById('btn-submit-product').textContent = 'Lưu thay đổi';
+
+      const idInput = document.getElementById('form-product-id');
+      idInput.value = product.id;
+      idInput.disabled = true;
+
+      document.getElementById('form-product-name').value = product.name;
+      document.getElementById('form-product-stage').value = product.stageId;
+      document.getElementById('form-product-type').value = product.type;
+      document.getElementById('form-product-unit').value = product.unit || 'kg';
+      document.getElementById('form-product-spec').value = product.spec || '';
+
+      openModal('product-modal');
+    }
+
+    function handleSaveProduct(event) {
+      event.preventDefault();
+      const editId = document.getElementById('form-product-edit-id').value.trim();
+      const id = document.getElementById('form-product-id').value.trim();
+      const name = document.getElementById('form-product-name').value.trim();
+      const stageId = document.getElementById('form-product-stage').value;
+      const type = document.getElementById('form-product-type').value;
+      const unit = document.getElementById('form-product-unit').value;
+      const spec = document.getElementById('form-product-spec').value.trim();
+
+      if (!id || !name || !stageId) {
+        showToast('Thiếu thông tin', 'Vui lòng nhập đầy đủ mã, tên sản phẩm và công đoạn.', 'error');
+        return;
+      }
+
+      if (editId) {
+        // Cập nhật / Đổi tên
+        const index = productsData.findIndex(p => p.id === editId);
+        if (index !== -1) {
+          productsData[index] = {
+            ...productsData[index],
+            name,
+            stageId,
+            type,
+            unit,
+            spec
+          };
+          saveProductsData();
+          closeModal('product-modal');
+          renderAll();
+          showToast('Đã cập nhật', `Sản phẩm ${name} đã được lưu thành công.`, 'success');
+        }
+      } else {
+        // Thêm mới - kiểm tra trùng mã
+        if (productsData.some(p => p.id.toLowerCase() === id.toLowerCase())) {
+          showToast('Mã bị trùng', `Mã sản phẩm '${id}' đã tồn tại trong hệ thống.`, 'error');
+          return;
+        }
+
+        const newProduct = {
+          id,
+          name,
+          stageId,
+          type,
+          unit,
+          spec
+        };
+
+        productsData.unshift(newProduct);
+        saveProductsData();
+        closeModal('product-modal');
+        renderAll();
+        showToast('Thêm thành công', `Đã thêm sản phẩm ${name} vào công đoạn ${stageId}.`, 'success');
+      }
+    }
+
+    // Modal Xoá
+    function openDeleteProductModal(productId) {
+      const product = productsData.find(p => p.id === productId);
+      if (!product) return;
+
+      pendingDeleteProductId = productId;
+      document.getElementById('delete-product-label').textContent = `[${product.id}] ${product.name}`;
+      openModal('delete-product-modal');
+    }
+
+    function handleConfirmDeleteProduct() {
+      if (!pendingDeleteProductId) return;
+
+      const product = productsData.find(p => p.id === pendingDeleteProductId);
+      const name = product ? product.name : pendingDeleteProductId;
+
+      productsData = productsData.filter(p => p.id !== pendingDeleteProductId);
+      saveProductsData();
+      closeModal('delete-product-modal');
+      pendingDeleteProductId = null;
+
+      renderAll();
+      showToast('Đã xoá', `Đã xoá sản phẩm ${name} khỏi danh mục.`, 'info');
+    }
+
+    // Quản lý Modal & Backdrop
+    function openModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) modal.classList.add('open');
+    }
+
+    function closeModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) modal.classList.remove('open');
+    }
+
+    function handleModalBackdropClick(event, modalId) {
+      if (event.target.id === modalId) {
+        closeModal(modalId);
+      }
+    }
+
+    // Điều hướng giữa các trang
+    function switchNav(navKey) {
+      if (navKey === 'weighStation') {
+        window.location.href = 'weighStation.html';
+        return;
+      }
+      if (navKey === 'process') {
+        window.location.href = 'process.html';
+        return;
+      }
+      if (navKey === 'products') {
+        return;
+      }
+
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      const activeItem = Array.from(document.querySelectorAll('.nav-item')).find(el => {
+        if (navKey === 'overview') return el.textContent.includes('Tổng quan');
+        if (navKey === 'hr') return el.textContent.includes('Nhân sự');
+        if (navKey === 'reports') return el.textContent.includes('Báo cáo');
+        return false;
+      });
+      if (activeItem) activeItem.classList.add('active');
+
+      showToast('Điều hướng mô phỏng', `Đang xem mô đun ${activeItem.textContent}. Bạn có thể bấm lại 'Trạm cân', 'Quy trình' hoặc 'Sản phẩm'.`, 'info');
+    }
+
+    // Toast
+    function showToast(title, message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast-item';
+
+      let iconSvg = '';
+      if (type === 'success') {
+        iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      } else if (type === 'error') {
+        iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+      } else {
+        iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+      }
+
+      toast.innerHTML = `
+        ${iconSvg}
+        <div>
+          <div style="font-weight: 600;">${escapeHtml(title)}</div>
+          <div style="font-size: 12px; color: #94A3B8;">${escapeHtml(message)}</div>
+        </div>
+      `;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        toast.style.transition = 'all 0.2s';
+        setTimeout(() => toast.remove(), 200);
+      }, 3500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Đóng modal khi nhấn phím Escape
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal('product-modal');
+        closeModal('delete-product-modal');
+      }
+    });
+  </script>
+</body>
+</html>
