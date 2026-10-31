@@ -23,7 +23,18 @@ from backend.protocol_parser import parse_dini_argeo
 
 # Khởi tạo Flask App (static_folder=None để custom route quản lý cả SPA routing và file tĩnh)
 app = Flask(__name__, static_folder=None)
-CORS(app)
+
+# CORS an toàn (tự động fallback nếu môi trường chưa nhận diện flask_cors)
+try:
+    from flask_cors import CORS
+    CORS(app)
+except ImportError:
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+        return response
 
 # ==========================================
 # 1. HEALTH CHECK & SYSTEM STATUS

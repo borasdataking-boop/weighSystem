@@ -8,9 +8,10 @@ node_modules/
 .pnp.js
 
 # 2. Build Outputs
-dist/
+# dist/ (Được commit để PythonAnywhere có thể phục vụ Frontend React ngay lập tức)
 dist-ssr/
 build/
+backend/node/dist/
 *.local
 
 # 3. Logs & Diagnostics
