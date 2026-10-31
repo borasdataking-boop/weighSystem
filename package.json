@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node backend/dist/server.cjs",
-    "server:build": "npx esbuild backend/src/server.ts --bundle --platform=node --outfile=backend/dist/server.cjs --external:pg-native",
+    "server": "python3 backend/app.py",
+    "server:python": "python3 backend/app.py",
+    "server:node": "node backend/node/dist/server.cjs",
+    "server:node:build": "npx esbuild backend/node/src/server.ts --bundle --platform=node --outfile=backend/node/dist/server.cjs --external:pg-native",
     "db:init": "/opt/homebrew/opt/postgresql@18/bin/psql -U phanbach -d weigh_dashboard -f database/init_db.sql",
     "db:seed": "node database/seed_db.cjs",
+    "db:seed:py": "python3 database/seed_data.py",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

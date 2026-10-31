@@ -1,104 +1,143 @@
-# TÀI LIỆU CẤU TRÚC THƯ MỤC HỆ THỐNG QUẢN LÝ TRẠM CÂN (PHAN BACH MANAGEMENT SYSTEM)
+# TÀI LIỆU CẤU TRÚC HỆ THỐNG QUẢN LÝ TRẠM CÂN (PHAN BACH WEIGH DASHBOARD)
 
-Tài liệu này giải thích cấu trúc mã nguồn được phân rã từ file mẫu HTML sang hệ thống linh kiện React/TypeScript (`.tsx`) chuẩn doanh nghiệp.
+Hệ thống quản lý sản xuất, trạm cân công nghiệp và giám sát mẻ cân IoT thời gian thực cho nhà máy chế biến thủy sản Phan Bách. Hệ thống được module hóa chuẩn mực, hỗ trợ chạy linh hoạt trên **PythonAnywhere (WSGI)**, môi trường **Python cục bộ**, hoặc **Node.js / PostgreSQL**.
 
 ---
 
-## 1. Cấu Trúc Tổng Quan
+## 1. Cấu Trúc Thư Mục Chuẩn Hóa
 
-```
+```text
 webDesignUI/
-├── weighStation.html                  # Bản HTML tĩnh Quản lý Trạm Cân (chạy độc lập)
-├── process.html                       # Bản HTML tĩnh Quản lý Quy Trình (chạy độc lập, tab thứ 2)
-├── logo.png                           # File logo gốc
-├── processflow.jpg                    # Sơ đồ quy trình công nghệ chuẩn nhà máy
-├── skill.md                           # Quy chuẩn tư duy UX/UI & 5 câu hỏi cốt lõi
+├── backend/                           # TẦNG MÁY CHỦ DỊCH VỤ (BACKEND)
+│   ├── app.py                         # Máy chủ Flask (REST API + Phục vụ SPA React)
+│   ├── wsgi.py                        # Entry point chuẩn WSGI cho production
+│   ├── pythonanywhere_wsgi.py         # Mẫu cấu hình WSGI dán trực tiếp trên PythonAnywhere
+│   ├── config.py                      # Quản lý cấu hình & biến môi trường
+│   ├── db.py                          # Kết nối Database thống nhất (PostgreSQL & SQLite)
+│   ├── services.py                    # Nghiệp vụ: Quy trình, Trạm cân, Sản phẩm, Mẻ cân, KPI
+│   ├── iot_service.py                 # Ingestion dữ liệu mẻ cân từ STM32/Dini Argeo (Debounce)
+│   ├── protocol_parser.py             # Bộ giải mã chuỗi ASCII đầu cân Dini Argeo
+│   ├── requirements.txt               # Thư viện Python cần thiết (Flask, CORS, psycopg2,...)
+│   ├── .env.example                   # Mẫu cấu hình môi trường
+│   ├── node/                          # Máy chủ Node.js / TypeScript gốc (kèm TCP socket)
+│   │   ├── src/                       # Mã nguồn TypeScript server
+│   │   └── dist/                      # Bản build server.cjs
+│   └── stm32_firmware_sample/         # Mã nguồn mẫu firmware C cho vi điều khiển STM32
 │
-└── src/                               # CẤU TRÚC MODULE HOÁ CHUẨN (REACT / TYPESCRIPT .TSX)
-    │
-    ├── types/                         # Định nghĩa kiểu dữ liệu (Data Models / DTOs)
-    │   ├── station.types.ts           # Kiểu dữ liệu trạm cân (StationWeigh, Status, Protocol...)
-    │   ├── process.types.ts           # Kiểu dữ liệu công đoạn chế biến (ProcessStage, Step...)
-    │   ├── product.types.ts           # Kiểu dữ liệu danh mục sản phẩm (ProductItem, ProductType...)
-    │   └── log.types.ts               # Kiểu dữ liệu nhật ký cân (production_weight_logs, IN/OUT/WiP/Yield)
-    │
-    ├── services/                      # Tầng giao tiếp dữ liệu (API / Storage Abstraction)
-    │   ├── stationService.ts          # CRUD trạm cân, cấu hình IoT, gán/thu hồi cân
-    │   ├── processService.ts          # CRUD công đoạn, đồ thị DAG, thuật toán BFS kiểm tra vòng lặp
-    │   ├── productService.ts          # CRUD danh mục 34 sản phẩm, lọc theo khâu, sinh mã tự động
-    │   └── logService.ts              # Quản lý mẻ cân, tính toán IN/OUT, WiP & % Yield toàn chuyền
-    │
-    ├── components/                    # Các linh kiện giao diện tái sử dụng (.tsx)
-    │   ├── layout/
-    │   │   └── Header.tsx             # Thanh tiêu đề đỏ chuẩn ảnh chụp (Logo + Nav + User)
-    │   ├── common/
-    │   │   ├── StatusBadge.tsx        # Huy hiệu trạng thái kết nối (Online / Offline / Hiệu chuẩn)
-    │   │   └── Toast.tsx              # Hộp thông báo nổi trực quan (không emoji, dùng SVG)
-    │   ├── overview/                  # Module Tổng Quan Dây Chuyền Sản Xuất
-    │   │   ├── ProductionKPICards.tsx # 4 thẻ chỉ số IN, WiP, OUT & % Yield
-    │   │   ├── VisualPipelineFlow.tsx # Sơ đồ trực quan dòng chảy 4 cụm & Yield theo lô
-    │   │   ├── ProductionLogTable.tsx # Bảng log chuẩn 100% pgAdmin 4 (production_weight_logs)
-    │   │   └── AddLogModal.tsx        # Modal ghi nhận / giả lập mẻ cân mới
-    │   ├── stations/                  # Module Quản lý Trạm Cân
-    │   │   ├── KPICards.tsx           # 4 thẻ chỉ số nhanh
-    │   │   ├── FilterToolbar.tsx      # Thanh công cụ: đổi view, tìm kiếm, lọc
-    │   │   ├── StationTable.tsx       # Bảng danh sách trạm cân chi tiết
-    │   │   ├── StationCard.tsx        # Thẻ cân trong sơ đồ công đoạn
-    │   │   ├── StationPipeline.tsx    # Sơ đồ sắp xếp cân theo công đoạn
-    │   │   ├── AddScaleModal.tsx      # Modal thêm mới và chỉnh sửa thông số trạm cân
-    │   │   └── DeleteScaleModal.tsx   # Modal xác nhận xoá trạm cân an toàn
-    │   └── process/                   # Module Quản lý Quy Trình Chế Biến
-    │       ├── ProcessKPICards.tsx    # 4 thẻ chỉ số quy trình
-    │       ├── ProcessFlowDiagram.tsx # Sơ đồ luồng chuyền 10 bước x 15 công đoạn
-    │       ├── ProcessTable.tsx       # Bảng danh sách 15 công đoạn chi tiết
-    │       ├── AddProcessModal.tsx    # Modal thêm / sửa công đoạn
-    │       ├── ProcessDetailModal.tsx # Modal chi tiết khâu & điều phối trạm cân
-    │       └── ProcessImageModal.tsx  # Lightbox xem sơ đồ gốc processflow.jpg
-    │
-    └── pages/
-        ├── OverviewPage.tsx           # Màn hình Tổng quan dây chuyền & Bảng log mẻ cân
-        ├── WeighStationPage.tsx       # Màn hình Quản lý Trạm Cân
-        ├── ProcessPage.tsx            # Màn hình Quản lý Quy Trình Chế Biến
-        └── ProductPage.tsx            # Màn hình Quản lý Danh Mục Sản Phẩm
+├── database/                          # TẦNG CƠ SỞ DỮ LIỆU
+│   ├── init_db.sql                    # Schema PostgreSQL chuẩn (bảng, chỉ mục)
+│   ├── init_sqlite.sql                # Schema SQLite tối ưu cho PythonAnywhere Free Tier
+│   ├── seed_data.py                   # Script Python nạp dữ liệu mẫu cho cả PostgreSQL & SQLite
+│   ├── seed_db.cjs                    # Script nạp dữ liệu mẫu gốc (Node.js)
+│   └── pmsl_weigh_sample.sql          # Bản xuất dữ liệu mẫu
+│
+├── src/                               # TẦNG GIAO DIỆN NGƯỜI DÙNG (REACT 18 + TYPESCRIPT)
+│   ├── types/                         # Định nghĩa kiểu dữ liệu (station, process, product, log)
+│   ├── services/                      # Tầng gọi API kết nối máy chủ (/api/*)
+│   ├── components/                    # Linh kiện giao diện tái sử dụng
+│   │   ├── layout/                    # Header thanh điều hướng chuẩn nhận diện Phan Bách
+│   │   ├── common/                    # StatusBadge, Toast thông báo
+│   │   ├── overview/                  # KPI Cards, Sơ đồ dòng chảy 4 cụm, Bảng nhật ký mẻ cân
+│   │   ├── stations/                  # Quản lý 27 trạm cân, Sơ đồ Pipeline trạm cân
+│   │   └── process/                   # Quản lý 15 công đoạn chế biến & Đồ thị liên kết
+│   └── pages/                         # Các màn hình chính (Overview, WeighStation, Process, Product)
+│
+├── public/                            # TÀI NGUYÊN TĨNH
+│   ├── logo.png                       # Logo thương hiệu Phan Bách
+│   └── processflow.jpg                # Sơ đồ quy trình công nghệ chuẩn nhà máy
+│
+├── dist/                              # BẢN BUILD SẴN SÀNG TRIỂN KHAI CỦA FRONTEND
+├── legacy/                            # BẢN MẪU TĨNH GỐC ĐÃ ĐƯỢC DỌN DẸP
+│   ├── weighStation.html              # Bản HTML mẫu cũ
+│   ├── process.html                   # Bản HTML mẫu cũ
+│   └── product.html                   # Bản HTML mẫu cũ
+│
+├── package.json                       # Danh mục scripts và thư viện NPM
+├── vite.config.ts                     # Cấu hình Vite bundler & reverse proxy /api
+├── tailwind.config.js                 # Cấu hình Tailwind CSS
+├── DEPLOYMENT_PYTHONANYWHERE.md       # Hướng dẫn chi tiết từng bước chạy trên PythonAnywhere
+└── README.md                          # Tài liệu tổng quan hệ thống
 ```
 
 ---
 
-## 2. Ý Nghĩa Của Từng Thư Mục
+## 2. Hướng Dẫn Triển Khai & Khởi Chạy
 
-| Thư mục | Vai trò trong hệ thống |
-| :--- | :--- |
-| **`types/`** | Định nghĩa cấu trúc dữ liệu theo đúng chuẩn Database PostgreSQL (`PMSL.sql`), giúp bắt lỗi sai tên thuộc tính ngay khi viết code. |
-| **`services/`** | Nơi xử lý dữ liệu. Hiện tại đang lưu vào `localStorage`, khi kết nối với Backend chỉ cần đổi sang gọi `fetch('/api/stations')` mà không phải sửa lại giao diện. |
-| **`components/layout/`** | Thanh Header màu đỏ dùng chung cho tất cả các trang (*Tổng quan, Trạm cân, Quy trình, Sản phẩm, Nhân sự, Báo cáo*). |
-| **`components/stations/`** | Các khối linh kiện độc lập của trang Quản lý Trạm Cân (Bảng, Thẻ, Modal, Pipeline). |
-| **`pages/`** | Màn hình hoàn chỉnh điều phối các linh kiện và trạng thái ứng dụng.
+### Cách 1: Triển khai trên PythonAnywhere
+Xem toàn bộ hướng dẫn từng bước chi tiết tại:  
+👉 **[DEPLOYMENT_PYTHONANYWHERE.md](file:///Users/phanbach/Desktop/TheBaoUser/PhanBachWork/website/weigh_dashboard/webDesignUI/DEPLOYMENT_PYTHONANYWHERE.md)**
+
+Tóm tắt các bước chính:
+1. Git clone mã nguồn vào tài khoản PythonAnywhere.
+2. Tạo virtualenv và cài đặt: `pip install -r backend/requirements.txt`.
+3. Nạp database mẫu: `python3 database/seed_data.py` (tạo ngay file SQLite không cần cài thêm DB).
+4. Cấu hình thẻ **Web** với file WSGI theo mẫu `backend/pythonanywhere_wsgi.py`.
+5. Nhấn **Reload** và truy cập tên miền `https://<username>.pythonanywhere.com`.
 
 ---
 
-## 3. Hướng Dẫn Khởi Chạy Hệ Thống
+### Cách 2: Khởi chạy nhanh cục bộ với Python Backend (Khuyên dùng)
+Máy chủ Python Flask tự động phục vụ cả REST API và giao diện tĩnh Vite React:
 
-Dự án là một hệ thống Full-stack khép kín hoàn chỉnh nằm trọn trong thư mục `webDesignUI`:
-
-### Bước 1: Khởi động cơ sở dữ liệu (PostgreSQL)
-Đảm bảo dịch vụ PostgreSQL đang chạy:
 ```bash
-brew services start postgresql@18
-# Khởi tạo DB & nạp dữ liệu mẫu (chỉ cần chạy lần đầu):
-npm run db:init
-npm run db:seed
+# 1. Cài đặt thư viện Python (nếu chưa cài):
+pip install -r backend/requirements.txt
+
+# 2. Khởi tạo & nạp dữ liệu mẫu vào SQLite:
+python3 database/seed_data.py
+
+# 3. Chạy máy chủ:
+python3 backend/app.py
 ```
+Truy cập hệ thống tại: **`http://localhost:5001`**
 
-### Bước 2: Chạy Backend API & TCP Socket
+---
+
+### Cách 3: Chế độ Lập trình viên Frontend (Hot Reload React)
+Khi cần chỉnh sửa giao diện giao diện React với Hot Reload tức thì:
+
 ```bash
-# Build & chạy server API (cổng 5001) và TCP IoT (cổng 8000):
-npm run server:build
+# Terminal 1: Chạy máy chủ Backend API (cổng 5001)
 npm run server
-```
 
-### Bước 3: Chạy Frontend Dashboard
-```bash
-# Khởi chạy giao diện React Vite (cổng 3000):
+# Terminal 2: Chạy Vite Development Server (cổng 3000)
 npm run dev
 ```
-Truy cập giao diện tại: **`http://localhost:3000`**
+Truy cập giao diện tại: **`http://localhost:3000`** (Vite tự động chuyển tiếp các yêu cầu `/api/*` sang cổng 5001).
+
+---
+
+### Cách 4: Chạy với Node.js Backend & PostgreSQL (Tùy chọn)
+Nếu bạn muốn sử dụng Node.js backend và mở cổng TCP socket cho trạm cân thực tế:
+
+```bash
+# 1. Khởi tạo cơ sở dữ liệu PostgreSQL
+npm run db:init
+npm run db:seed
+
+# 2. Build và khởi chạy Node.js Server
+npm run server:node:build
+npm run server:node
+```
+
+---
+
+## 3. Danh Mục Các Điểm Cuối REST API
+
+| Phương thức | Đường dẫn | Chức năng |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Kiểm tra tình trạng kết nối DB & số lô hoạt động |
+| `GET` | `/api/processes` | Lấy danh sách 15 công đoạn & 17 liên kết luồng |
+| `POST` | `/api/processes` | Thêm mới / cập nhật công đoạn |
+| `DELETE` | `/api/processes/:id` | Xóa công đoạn |
+| `GET` | `/api/stations` | Lấy danh sách 27 trạm cân công nghiệp |
+| `POST` | `/api/stations` | Thêm mới trạm cân |
+| `PUT` | `/api/stations/:id` | Cập nhật thông số trạm cân |
+| `DELETE` | `/api/stations/:id` | Xóa trạm cân |
+| `GET` | `/api/products` | Lấy danh mục quy cách sản phẩm theo khâu |
+| `GET` | `/api/logs` | Lấy lịch sử mẻ cân (lọc theo `batch_id`) |
+| `POST` | `/api/logs` | Ghi nhận mẻ cân thủ công từ giao diện |
+| `DELETE` | `/api/logs/:id` | Xóa bản ghi mẻ cân |
+| `GET` | `/api/metrics` | Lấy 4 chỉ số KPI chính (IN, WiP, OUT, Yield %) |
+| `GET` | `/api/batches` | Lấy danh sách mã lô sản xuất |
+| `POST` | `/api/iot/weigh` | Tiếp nhận mẻ cân tự động từ chip STM32 / Loadcell |
