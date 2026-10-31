@@ -1,5 +1,20 @@
-# Logs
-logs
+# ==============================================================================
+# WEIGH DASHBOARD .GITIGNORE
+# ==============================================================================
+
+# 1. Dependencies & Package Managers
+node_modules/
+.pnp
+.pnp.js
+
+# 2. Build Outputs
+dist/
+dist-ssr/
+build/
+*.local
+
+# 3. Logs & Diagnostics
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,15 +22,15 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-*.zip
+# 4. Environment Variables & Credentials
 .env
 .env.*
+!.env.example
+!*.env.example
+*.pem
+*.key
 
-# Python
+# 5. Python Artifacts & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,18 +40,40 @@ env/
 venv/
 .venv/
 ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 6. Database Files (Không commit database cục bộ chứa dữ liệu thật)
 *.sqlite
 *.sqlite3
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 
-# Editor directories and files
+# 7. Archives & Backups
+*.zip
+*.tar.gz
+*.rar
+
+# 8. Operating System Files (macOS & Windows)
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 9. IDE & Editor Files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*~
