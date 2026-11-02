@@ -1,4 +1,4 @@
-import { ProductionWeightLog, ProductionMetrics, BatchSummary, StageWiPSummary } from '../types/log.types';
+import { ProductionWeightLog, ProductionMetrics, BatchSummary, StageWiPSummary, WeightIOType, BatchInfo } from '../types/log.types';
 import { ProcessStage } from '../types/process.types';
 import { stationService } from './stationService';
 import { productService } from './productService';
@@ -545,7 +545,7 @@ export const logService = {
   },
 
   /**
-   * Gửi mẻ cân mới lưu trực tiếp vào PostgreSQL
+   * Gửi mẻ cân mới lưu trực tiếp vào PostgreSQL / SQLite Database
    */
   async createLogInDatabase(input: {
     station_id: string;
@@ -554,7 +554,10 @@ export const logService = {
     batch_id?: string;
     product_id?: string;
     employee_id?: string | null;
-  }): Promise<ProductionWeightLog | null> {
+    process_id?: string;
+    type_weight?: WeightIOType;
+    source_method?: string;
+  }): Promise<ProductionWeightLog> {
     try {
       const res = await fetch('/api/logs', {
         method: 'POST',
@@ -568,9 +571,41 @@ export const logService = {
         return created;
       }
     } catch (err) {
-      console.error('[logService] Lỗi khi lưu mẻ cân vào DB:', err);
+      console.warn('[logService] Lỗi khi gọi API /api/logs, tự động lưu vào storage cục bộ:', err);
     }
-    return null;
+    const createdList = this.addLog(input);
+    return createdList[0];
+  },
+
+  /**
+   * Lưu hàng loạt mẻ cân cùng lúc (Batch Ingestion giải quyết 200 - 300 requests/lần)
+   */
+  async createLogsBatchInDatabase(inputs: Array<{
+    station_id: string;
+    value_weight: number;
+    tare_weight: number;
+    batch_id?: string;
+    product_id?: string;
+    employee_id?: string | null;
+  }>): Promise<ProductionWeightLog[]> {
+    try {
+      const res = await fetch('/api/logs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inputs)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const createdList: ProductionWeightLog[] = json.items || [];
+        const current = this.getLogs();
+        const updated = [...createdList, ...current];
+        this.saveLogs(updated);
+        return createdList;
+      }
+    } catch (err) {
+      console.warn('[logService] Lỗi gọi API /api/logs/batch, chuyển sang lưu bộ đệm:', err);
+    }
+    return this.addLogsBatch(inputs);
   },
 
   /**
@@ -609,7 +644,13 @@ export const logService = {
 
   saveLogs(logs: ProductionWeightLog[]): void {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+      try {
+        // Chỉ lưu tối đa 500 bản ghi gần nhất vào localStorage để tránh QuotaExceededError khi dữ liệu lên tới hàng triệu dòng
+        const toCache = logs.length > 500 ? logs.slice(0, 500) : logs;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toCache));
+      } catch (e) {
+        console.warn('[logService] Không thể lưu vào LocalStorage (vượt quá dung lượng cho phép):', e);
+      }
     }
   },
 
@@ -666,6 +707,52 @@ export const logService = {
     };
 
     const updated = [item, ...list];
+    this.saveLogs(updated);
+    return updated;
+  },
+
+  /**
+   * Thêm hàng loạt mẻ cân cùng lúc qua bộ đệm micro-batch (chống giật lag khi 200 - 300 requests tới cùng lúc)
+   */
+  addLogsBatch(inputs: Array<Partial<ProductionWeightLog> & { station_id: string; value_weight: number; tare_weight: number }>): ProductionWeightLog[] {
+    const list = this.getLogs();
+    let nextId = list.length > 0 ? Math.max(...list.map(l => l.log_id)) + 1 : 1;
+    const stations = stationService.getStations();
+    const products = productService.getProducts();
+    const defaultBatch = this.getBatches()[0] || 'L0001';
+
+    const newItems: ProductionWeightLog[] = inputs.map(input => {
+      const val = Number(input.value_weight) || 0;
+      const tare = Number(input.tare_weight) || 0;
+      const net = Number((val - tare).toFixed(3));
+      const station = stations.find(s => (s.stationId || s.id) === input.station_id);
+      const assignedProcessId = station?.processId || station?.stageId || input.process_id || 'CD001';
+      const assignedIOType = station?.ioType || station?.typeWeight || input.type_weight || 'IN';
+      const sourceMethod = input.source_method || station?.protocol || 'TCP/IP';
+
+      let assignedProductId = input.product_id;
+      if (!assignedProductId || !products.some(p => p.id === assignedProductId)) {
+        const stageProd = products.find(p => p.stageId === assignedProcessId);
+        assignedProductId = stageProd?.id || 'TOM001';
+      }
+
+      return {
+        log_id: nextId++,
+        batch_id: input.batch_id || defaultBatch,
+        station_id: input.station_id,
+        process_id: assignedProcessId,
+        product_id: assignedProductId,
+        type_weight: assignedIOType,
+        value_weight: val,
+        tare_weight: tare,
+        net_weight: net,
+        time_action: input.time_action || new Date().toISOString(),
+        employee_id: input.employee_id || 'NV001',
+        source_method: sourceMethod
+      };
+    });
+
+    const updated = [...newItems, ...list];
     this.saveLogs(updated);
     return updated;
   },
@@ -830,10 +917,186 @@ export const logService = {
   },
 
   /**
-   * Lấy danh sách các mã lô hàng duy nhất
+   * Lấy danh sách các mã lô hàng duy nhất (chỉ trả về các lô chưa bị xoá mềm)
    */
   getBatches(customLogs?: ProductionWeightLog[]): string[] {
+    const batchesInfo = this.getBatchesInfo();
+    const deletedBatchIds = new Set(
+      batchesInfo.filter(b => b.isDeleted || b.status === 'CANCELLED').map(b => b.batchId)
+    );
+
     const logs = customLogs || this.getLogs();
-    return Array.from(new Set(logs.map(l => l.batch_id))).filter(Boolean);
+    const fromLogs = Array.from(new Set(logs.map(l => l.batch_id))).filter(Boolean);
+    const fromMeta = batchesInfo.filter(b => !b.isDeleted && b.status !== 'CANCELLED').map(b => b.batchId);
+
+    const all = Array.from(new Set([...fromMeta, ...fromLogs]));
+    return all.filter(id => !deletedBatchIds.has(id));
+  },
+
+  /**
+   * Quản lý thông tin chi tiết các Lô sản xuất (BatchInfo)
+   */
+  getBatchesInfo(): BatchInfo[] {
+    try {
+      const stored = localStorage.getItem('pb_batches_info_v1');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch {
+      // ignore
+    }
+
+    const defaultBatches: BatchInfo[] = [
+      {
+        batchId: 'L0001',
+        batchName: 'Tôm thẻ chân trắng xuất EU',
+        plannedWeight: 200000,
+        startDate: '2026-10-01',
+        origin: 'Cà Mau - HTX Minh Phú',
+        status: 'IN_PROGRESS',
+        notes: 'Quy chuẩn cấp đông IQF, độ muối 1.5%'
+      },
+      {
+        batchId: 'L0002',
+        batchName: 'Tôm sú nguyên liệu loại 1',
+        plannedWeight: 150000,
+        startDate: '2026-10-03',
+        origin: 'Bạc Liêu - Hộ nuôi Năm Căn',
+        status: 'IN_PROGRESS',
+        notes: 'Size 20-25 con/kg'
+      },
+      {
+        batchId: 'L0003',
+        batchName: 'Tôm Nobashi đông lạnh',
+        plannedWeight: 80000,
+        startDate: '2026-10-05',
+        origin: 'Sóc Trăng',
+        status: 'IN_PROGRESS',
+        notes: 'Định hình duỗi thẳng Nobashi xuất Nhật'
+      },
+      {
+        batchId: 'test',
+        batchName: 'Lô thử nghiệm kỹ thuật',
+        plannedWeight: 50000,
+        startDate: '2026-10-01',
+        origin: 'Nội bộ',
+        status: 'IN_PROGRESS',
+        notes: 'Dùng kiểm thử hệ thống trạm cân IoT'
+      }
+    ];
+
+    try {
+      localStorage.setItem('pb_batches_info_v1', JSON.stringify(defaultBatches));
+    } catch {
+      // ignore
+    }
+    return defaultBatches;
+  },
+
+  getBatchInfo(batchId: string): BatchInfo | undefined {
+    const list = this.getBatchesInfo();
+    return list.find(b => b.batchId === batchId);
+  },
+
+  async saveBatch(batch: BatchInfo): Promise<BatchInfo> {
+    const list = this.getBatchesInfo();
+    const existingIndex = list.findIndex(b => b.batchId === batch.batchId);
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...batch };
+    } else {
+      list.push(batch);
+    }
+    try {
+      localStorage.setItem('pb_batches_info_v1', JSON.stringify(list));
+    } catch {
+      // ignore
+    }
+
+    // Gửi lên backend API nếu có kết nối
+    try {
+      await fetch('/api/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batch)
+      });
+    } catch {
+      // ignore
+    }
+
+    return batch;
+  },
+
+  async updateBatch(batchId: string, updates: Partial<BatchInfo>): Promise<BatchInfo> {
+    const list = this.getBatchesInfo();
+    const existingIndex = list.findIndex(b => b.batchId === batchId);
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...updates };
+      try {
+        localStorage.setItem('pb_batches_info_v1', JSON.stringify(list));
+      } catch {
+        // ignore
+      }
+
+      try {
+        await fetch(`/api/batches/${encodeURIComponent(batchId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+      } catch {
+        // ignore
+      }
+
+      return list[existingIndex];
+    }
+    const newBatch: BatchInfo = {
+      batchId,
+      batchName: updates.batchName || `Lô ${batchId}`,
+      status: updates.status || 'IN_PROGRESS',
+      ...updates
+    };
+    return this.saveBatch(newBatch);
+  },
+
+  /**
+   * XOÁ MỀM LÔ SẢN XUẤT (SOFT DELETE):
+   * Tuyệt đối KHÔNG xoá cứng (hard delete) dữ liệu để bảo toàn 100% lịch sử cân,
+   * ngăn ngừa hiện tượng mồ côi dữ liệu (orphaned logs) trong bảng nhật ký mẻ cân.
+   */
+  async deleteBatch(batchId: string): Promise<boolean> {
+    const list = this.getBatchesInfo();
+    const target = list.find(b => b.batchId === batchId);
+    if (target) {
+      target.isDeleted = true;
+      target.deletedAt = new Date().toISOString();
+      target.status = 'CANCELLED';
+    } else {
+      list.push({
+        batchId,
+        batchName: `Lô ${batchId}`,
+        status: 'CANCELLED',
+        isDeleted: true,
+        deletedAt: new Date().toISOString()
+      });
+    }
+
+    try {
+      localStorage.setItem('pb_batches_info_v1', JSON.stringify(list));
+    } catch {
+      // ignore
+    }
+
+    // Bảo toàn toàn bộ dữ liệu nhật ký mẻ cân trong database/storage (không xoá log)
+
+    // Gửi yêu cầu xoá mềm lên backend API
+    try {
+      await fetch(`/api/batches/${encodeURIComponent(batchId)}`, {
+        method: 'DELETE'
+      });
+    } catch {
+      // ignore
+    }
+
+    return true;
   }
 };

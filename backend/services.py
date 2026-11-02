@@ -238,13 +238,9 @@ class DBDataService:
 
         # 1. Soft lookup từ station_weigh
         stn = db.query_one("SELECT * FROM station_weigh WHERE station_id = %s", [station_id])
-        process_id = 'CD001'
-        type_weight = 'IN'
-        protocol = 'TCP/IP'
-        if stn:
-            process_id = stn.get('process_id', 'CD001')
-            type_weight = stn.get('io_type', 'IN')
-            protocol = stn.get('protocol', 'TCP/IP')
+        process_id = input_data.get('process_id') or (stn.get('process_id', 'CD001') if stn else 'CD001')
+        type_weight = input_data.get('type_weight') or (stn.get('io_type', 'IN') if stn else 'IN')
+        protocol = stn.get('protocol', 'TCP/IP') if stn else 'TCP/IP'
 
         # 2. Soft lookup từ product
         product_id = input_data.get('product_id')
@@ -297,6 +293,68 @@ class DBDataService:
             'source_method': source_method
         }
 
+    def create_logs_batch(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Xử lý chèn hàng loạt (Bulk Ingestion) cho 200 - 300 requests trong 1 transaction duy nhất"""
+        if not items:
+            return []
+
+        station_rows = db.query_all("SELECT station_id, process_id, io_type, protocol FROM station_weigh")
+        stn_map = {str(r['station_id']): r for r in station_rows}
+
+        time_iso = datetime.now(timezone.utc).isoformat()
+        records_to_insert = []
+        result = []
+
+        for item in items:
+            station_id = str(item.get('station_id', ''))
+            val = float(item.get('value_weight') or 0.0)
+            tare = float(item.get('tare_weight') or 0.0)
+            net = round(val - tare, 3)
+
+            stn = stn_map.get(station_id, {})
+            process_id = item.get('process_id') or stn.get('process_id', 'CD001')
+            type_weight = item.get('type_weight') or stn.get('io_type', 'IN')
+            protocol = stn.get('protocol', 'TCP/IP')
+            product_id = item.get('product_id') or 'TOM001'
+            batch_id = item.get('batch_id') or 'L0001'
+            employee_id = item.get('employee_id')
+            source_method = item.get('source_method') or protocol
+
+            records_to_insert.append((
+                batch_id, station_id, process_id, product_id, type_weight,
+                val, tare, net, item.get('time_action') or time_iso, employee_id, source_method
+            ))
+
+            result.append({
+                'batch_id': batch_id,
+                'station_id': station_id,
+                'process_id': process_id,
+                'product_id': product_id,
+                'type_weight': type_weight,
+                'value_weight': val,
+                'tare_weight': tare,
+                'net_weight': net,
+                'time_action': item.get('time_action') or time_iso,
+                'employee_id': employee_id,
+                'source_method': source_method
+            })
+
+        conn = db.get_connection()
+        try:
+            cur = conn.cursor()
+            sql = """
+                INSERT INTO production_weight_logs 
+                (batch_id, station_id, process_id, product_id, type_weight, value_weight, tare_weight, net_weight, time_action, employee_id, source_method)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            converted_sql = db._convert_sql(sql)
+            cur.executemany(converted_sql, records_to_insert)
+            conn.commit()
+        finally:
+            conn.close()
+
+        return result
+
     def delete_log(self, log_id: int) -> None:
         db.execute("DELETE FROM production_weight_logs WHERE log_id = %s", [log_id])
 
@@ -336,13 +394,55 @@ class DBDataService:
     def get_batches(self) -> List[str]:
         sql = """
             SELECT DISTINCT batch_id FROM (
-                SELECT batch_id FROM batch
+                SELECT batch_id FROM batch WHERE status != 'CANCELLED'
                 UNION
-                SELECT batch_id FROM production_weight_logs
+                SELECT batch_id FROM production_weight_logs WHERE batch_id NOT IN (
+                    SELECT batch_id FROM batch WHERE status = 'CANCELLED'
+                )
             ) sub ORDER BY batch_id ASC
         """
         rows = db.query_all(sql)
         return [r['batch_id'] for r in rows if r.get('batch_id')]
+
+    def create_batch(self, batch_id: str, batch_name: str = '', status: str = 'IN_PROGRESS') -> Dict[str, Any]:
+        sql = "INSERT INTO batch (batch_id, batch_name, status) VALUES (%s, %s, %s)"
+        try:
+            db.execute(sql, (batch_id, batch_name, status))
+        except Exception:
+            pass
+        return {'batch_id': batch_id, 'batch_name': batch_name, 'status': status}
+
+    def update_batch(self, batch_id: str, batch_name: Optional[str] = None, status: Optional[str] = None) -> bool:
+        fields = []
+        params = []
+        if batch_name is not None:
+            fields.append("batch_name = %s")
+            params.append(batch_name)
+        if status is not None:
+            fields.append("status = %s")
+            params.append(status)
+        if not fields:
+            return True
+        params.append(batch_id)
+        sql = f"UPDATE batch SET {', '.join(fields)} WHERE batch_id = %s"
+        try:
+            db.execute(sql, tuple(params))
+        except Exception:
+            pass
+        return True
+
+    def delete_batch(self, batch_id: str) -> bool:
+        """
+        XOÁ MỀM (SOFT DELETE):
+        Tuyệt đối không xoá cứng các dòng khỏi bảng batch hay production_weight_logs
+        để bảo toàn toàn vẹn nhật ký mẻ cân, ngăn ngừa mồ côi dữ liệu (orphaned logs).
+        """
+        sql = "UPDATE batch SET status = 'CANCELLED' WHERE batch_id = %s"
+        try:
+            db.execute(sql, (batch_id,))
+        except Exception:
+            pass
+        return True
 
 
 db_data_service = DBDataService()

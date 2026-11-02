@@ -39,6 +39,19 @@ export interface BatchSummary {
   lastAction: string;
 }
 
+export interface BatchInfo {
+  batchId: string;
+  batchName: string;
+  plannedWeight?: number;        // Khối lượng kế hoạch ban đầu (kg)
+  startDate?: string;            // Ngày bắt đầu sản xuất
+  origin?: string;               // Xuất xứ nguyên liệu / Nhà cung ứng
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'PENDING' | 'CANCELLED';
+  isDeleted?: boolean;           // Đánh dấu xoá mềm (Soft Delete) - Bảo toàn dữ liệu lịch sử
+  deletedAt?: string;            // Thời điểm xoá mềm
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface StageWiPSummary {
   processId: string;
   processName: string;

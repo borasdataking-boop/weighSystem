@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ProductionWeightLog, WeightIOType } from '../../types/log.types';
 import { ProcessStage } from '../../types/process.types';
 import { StationWeigh } from '../../types/station.types';
@@ -27,34 +27,50 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
   const [selectedProcess, setSelectedProcess] = useState('ALL');
   const [selectedIO, setSelectedIO] = useState<'ALL' | WeightIOType>('ALL');
 
+  // Phân trang để tối ưu hiệu năng khi có hàng chục nghìn mẻ cân (200 tấn x 5kg)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   // Tra cứu thông tin tên hiển thị
-  const stageMap = new Map(stages.map(s => [s.processId || s.id, s.processName || s.name]));
-  const stationMap = new Map(stations.map(s => [s.stationId || s.id, s.stationName || s.name]));
-  const productMap = new Map(products.map(p => [p.id, p.name]));
+  const stageMap = useMemo(() => new Map(stages.map(s => [s.processId || s.id, s.processName || s.name])), [stages]);
+  const stationMap = useMemo(() => new Map(stations.map(s => [s.stationId || s.id, s.stationName || s.name])), [stations]);
+  const productMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);
 
   // Lọc logs
-  const filteredLogs = logs.filter(log => {
-    if (selectedBatch !== 'ALL' && log.batch_id !== selectedBatch) return false;
-    if (selectedProcess !== 'ALL' && log.process_id !== selectedProcess) return false;
-    if (selectedIO !== 'ALL' && log.type_weight !== selectedIO) return false;
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      if (selectedBatch !== 'ALL' && log.batch_id !== selectedBatch) return false;
+      if (selectedProcess !== 'ALL' && log.process_id !== selectedProcess) return false;
+      if (selectedIO !== 'ALL' && log.type_weight !== selectedIO) return false;
 
-    if (searchKeyword.trim()) {
-      const kw = searchKeyword.toLowerCase();
-      const match =
-        String(log.log_id).includes(kw) ||
-        log.batch_id.toLowerCase().includes(kw) ||
-        log.station_id.toLowerCase().includes(kw) ||
-        log.process_id.toLowerCase().includes(kw) ||
-        log.product_id.toLowerCase().includes(kw) ||
-        (log.employee_id || '').toLowerCase().includes(kw) ||
-        (log.source_method || '').toLowerCase().includes(kw);
-      if (!match) return false;
-    }
+      if (searchKeyword.trim()) {
+        const kw = searchKeyword.toLowerCase();
+        const match =
+          String(log.log_id).includes(kw) ||
+          log.batch_id.toLowerCase().includes(kw) ||
+          log.station_id.toLowerCase().includes(kw) ||
+          log.process_id.toLowerCase().includes(kw) ||
+          log.product_id.toLowerCase().includes(kw) ||
+          (log.employee_id || '').toLowerCase().includes(kw) ||
+          (log.source_method || '').toLowerCase().includes(kw);
+        if (!match) return false;
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [logs, selectedBatch, selectedProcess, selectedIO, searchKeyword]);
 
-  const uniqueBatches = Array.from(new Set(logs.map(l => l.batch_id))).filter(Boolean);
+  // Reset về trang 1 khi lọc thay đổi
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchKeyword, selectedBatch, selectedProcess, selectedIO, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredLogs.length);
+  const paginatedLogs = useMemo(() => filteredLogs.slice(startIndex, endIndex), [filteredLogs, startIndex, endIndex]);
+
+  const uniqueBatches = useMemo(() => Array.from(new Set(logs.map(l => l.batch_id))).filter(Boolean), [logs]);
 
   const resetFilters = () => {
     setSearchKeyword('');
@@ -79,16 +95,28 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
     }
   };
 
+  const formatSourceMethod = (src?: string | null) => {
+    if (!src) return '—';
+    if (src === 'SCALE_TRIGGER') return 'Đầu cân';
+    if (src === 'MANUAL_KEYPAD') return 'Bàn phím';
+    if (src === 'TCP/IP') return 'Mạng LAN';
+    if (src === 'RS-232') return 'Cổng COM';
+    return src;
+  };
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
-      {/* Header bảng & Công cụ lọc */}
+    <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col mb-5">
+      {/* Header bảng */}
       <div className="p-4 border-b border-slate-200 flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#DE4444]" />
             <h3 className="text-sm font-bold text-slate-900">
-              Nhật Ký Cân
+              Nhật ký cân
             </h3>
+            <span className="text-xs text-slate-500 font-normal">
+              ({filteredLogs.length.toLocaleString('vi-VN')} lần cân)
+            </span>
           </div>
         </div>
 
@@ -103,7 +131,7 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
               type="text"
               value={searchKeyword}
               onChange={e => setSearchKeyword(e.target.value)}
-              placeholder="Tìm theo mã lô, trạm, mã SP, nhân viên..."
+              placeholder="Tìm theo mã lô, trạm cân, công đoạn, nhân viên..."
               className="w-full h-9 pl-9 pr-3 text-xs border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-[#DE4444] bg-white"
             />
           </div>
@@ -114,9 +142,9 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
             onChange={e => onSelectBatch(e.target.value)}
             className="h-9 px-3 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:border-[#DE4444] cursor-pointer"
           >
-            <option value="ALL">Tất cả các Lô</option>
+            <option value="ALL">Tất cả lô</option>
             {uniqueBatches.map(b => (
-              <option key={b} value={b}>Lô: {b}</option>
+              <option key={b} value={b}>Lô {b}</option>
             ))}
           </select>
 
@@ -141,9 +169,9 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
             onChange={e => setSelectedIO(e.target.value as any)}
             className="h-9 px-3 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:border-[#DE4444] cursor-pointer"
           >
-            <option value="ALL">Tất cả IN / OUT</option>
-            <option value="IN">Chỉ mẻ IN (Đầu vào)</option>
-            <option value="OUT">Chỉ mẻ OUT (Đầu ra)</option>
+            <option value="ALL">Tất cả loại</option>
+            <option value="IN">Vào (IN)</option>
+            <option value="OUT">Ra (OUT)</option>
           </select>
 
           {/* Nút đặt lại */}
@@ -160,8 +188,19 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
             </button>
           )}
 
-          <div className="ml-auto text-xs font-semibold text-slate-500">
-            Tổng cộng: <strong className="text-slate-900 font-mono text-sm">{filteredLogs.length}</strong> bản ghi
+          {/* Chọn số dòng hiển thị mỗi trang */}
+          <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
+            <span>Hiển thị:</span>
+            <select
+              value={pageSize}
+              onChange={e => setPageSize(Number(e.target.value))}
+              className="h-8 px-2 text-xs border border-slate-200 rounded bg-white text-slate-700 focus:outline-none focus:border-[#DE4444] cursor-pointer"
+            >
+              <option value={15}>15 dòng</option>
+              <option value={25}>25 dòng</option>
+              <option value={50}>50 dòng</option>
+              <option value={100}>100 dòng</option>
+            </select>
           </div>
         </div>
       </div>
@@ -187,14 +226,14 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-sans">
-            {filteredLogs.length === 0 ? (
+            {paginatedLogs.length === 0 ? (
               <tr>
                 <td colSpan={onDeleteLog ? 13 : 12} className="py-12 text-center text-slate-400 text-xs">
-                  Không tìm thấy dữ liệu cân nào phù hợp bộ lọc.
+                  Không có lần cân nào phù hợp bộ lọc.
                 </td>
               </tr>
             ) : (
-              filteredLogs.map(log => {
+              paginatedLogs.map(log => {
                 const stageName = stageMap.get(log.process_id) || log.process_id;
                 const stationName = stationMap.get(log.station_id) || log.station_id;
                 const productName = productMap.get(log.product_id) || log.product_id;
@@ -277,17 +316,16 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
                       <span className={isOut ? 'text-emerald-700' : 'text-blue-700'}>
                         {netWeight.toFixed(3)}
                       </span>
-                      <span className="text-[10px] text-slate-400 ml-1">kg</span>
                     </td>
 
                     {/* 11. employee_id */}
                     <td className="py-3 px-4 font-mono text-slate-600 text-xs whitespace-nowrap">
-                      {log.employee_id || <span className="text-slate-300 italic">null</span>}
+                      {log.employee_id || <span className="text-slate-300">—</span>}
                     </td>
 
                     {/* 12. source_method */}
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                      {log.source_method || <span className="text-slate-300 italic">[null]</span>}
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                      {formatSourceMethod(log.source_method)}
                     </td>
 
                     {/* 13. Xoá (chỉ hiển thị nếu onDeleteLog được truyền) */}
@@ -296,7 +334,7 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
                         <button
                           onClick={() => onDeleteLog(log.log_id)}
                           className="w-7 h-7 rounded border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 inline-flex items-center justify-center transition-colors cursor-pointer"
-                          title="Xoá bản ghi log này"
+                          title="Xoá lần cân này"
                         >
                           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polyline points="3 6 5 6 21 6" />
@@ -312,6 +350,57 @@ export const ProductionLogTable: React.FC<ProductionLogTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Điều khiển phân trang (Pagination) */}
+      {filteredLogs.length > 0 && (
+        <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between flex-wrap gap-3 text-xs">
+          <div className="text-slate-500">
+            Hiển thị <strong className="text-slate-800 font-mono">{startIndex + 1}</strong> - <strong className="text-slate-800 font-mono">{endIndex}</strong> trên <strong className="text-slate-800 font-mono">{filteredLogs.length.toLocaleString('vi-VN')}</strong> lần cân
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(1)}
+              className="px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer font-medium"
+              title="Về trang đầu"
+            >
+              « Đầu
+            </button>
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer font-medium"
+            >
+              ‹ Trước
+            </button>
+
+            <span className="px-3 py-1 font-mono text-slate-700 bg-white border border-slate-200 rounded">
+              Trang {currentPage} / {totalPages}
+            </span>
+
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer font-medium"
+            >
+              Sau ›
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+              className="px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 cursor-pointer font-medium"
+              title="Đến trang cuối"
+            >
+              Cuối »
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

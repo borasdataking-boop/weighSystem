@@ -175,6 +175,18 @@ def create_log():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/logs/batch', methods=['POST'])
+def create_logs_batch():
+    try:
+        body = request.json or []
+        items = body.get('logs', body) if isinstance(body, dict) else body
+        if not isinstance(items, list):
+            items = [items]
+        created = db_data_service.create_logs_batch(items)
+        return jsonify({'success': True, 'count': len(created), 'items': created}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/logs/<int:log_id>', methods=['DELETE'])
 def delete_log(log_id):
     try:
@@ -201,6 +213,39 @@ def get_batches():
     try:
         batches = db_data_service.get_batches()
         return jsonify(batches), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/batches', methods=['POST'])
+def create_batch():
+    try:
+        data = request.json or {}
+        batch_id = data.get('batch_id') or data.get('batchId')
+        if not batch_id:
+            return jsonify({'error': 'batch_id is required'}), 400
+        batch_name = data.get('batch_name') or data.get('batchName') or ''
+        status = data.get('status') or 'IN_PROGRESS'
+        created = db_data_service.create_batch(batch_id, batch_name, status)
+        return jsonify(created), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/batches/<batch_id>', methods=['PUT'])
+def update_batch(batch_id):
+    try:
+        data = request.json or {}
+        batch_name = data.get('batch_name') or data.get('batchName')
+        status = data.get('status')
+        db_data_service.update_batch(batch_id, batch_name, status)
+        return jsonify({'success': True, 'batch_id': batch_id}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/batches/<batch_id>', methods=['DELETE'])
+def delete_batch(batch_id):
+    try:
+        db_data_service.delete_batch(batch_id)
+        return jsonify({'success': True, 'deleted': batch_id}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

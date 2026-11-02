@@ -26,8 +26,12 @@ class Database:
             conn = psycopg2.connect(self.db_url)
             return conn
         else:
-            conn = sqlite3.connect(DEFAULT_SQLITE_PATH)
+            conn = sqlite3.connect(DEFAULT_SQLITE_PATH, timeout=10.0)
             conn.row_factory = sqlite3.Row
+            # Kích hoạt WAL mode và busy timeout để hỗ trợ 200 - 300 requests ghi đồng thời không bị lỗi database locked
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA busy_timeout = 5000;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
             return conn
 
     def _convert_sql(self, sql: str) -> str:
