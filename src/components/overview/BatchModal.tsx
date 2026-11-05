@@ -278,35 +278,59 @@ export const BatchModal: React.FC<BatchModalProps> = ({
           </div>
 
           {/* Footer Modal */}
-          <div className="px-5 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`px-4 py-2 text-xs font-bold text-white rounded-lg transition-colors cursor-pointer shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5 ${
-                mode === 'delete'
-                  ? 'bg-rose-600 hover:bg-rose-700'
-                  : 'bg-[#DE4444] hover:bg-[#c93636]'
-              }`}
-            >
-              {isSubmitting && (
-                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+          <div className="px-5 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2.5">
+            {mode === 'edit' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Bạn có chắc chắn muốn ngừng hoạt động / xoá mềm lô ${batchId}? Toàn bộ nhật ký cân của lô vẫn sẽ được lưu trữ an toàn.`)) {
+                    onDelete(batchId);
+                    onClose();
+                  }
+                }}
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg border border-transparent hover:border-rose-200 transition-colors cursor-pointer inline-flex items-center gap-1"
+                title="Xoá hoặc ngừng lô này"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 </svg>
-              )}
-              <span>
-                {mode === 'add' && 'Tạo lô sản xuất'}
-                {mode === 'edit' && 'Lưu thông tin'}
-                {mode === 'delete' && 'Xác nhận xoá mềm'}
-              </span>
-            </button>
+                <span>Xoá lô</span>
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`px-4 py-2 text-xs font-bold text-white rounded-lg transition-colors cursor-pointer shadow-xs disabled:opacity-50 inline-flex items-center gap-1.5 ${
+                  mode === 'delete'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-[#DE4444] hover:bg-[#c93636]'
+                }`}
+              >
+                {isSubmitting && (
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+                  </svg>
+                )}
+                <span>
+                  {mode === 'add' && 'Tạo lô sản xuất'}
+                  {mode === 'edit' && 'Lưu thông tin'}
+                  {mode === 'delete' && 'Xác nhận xoá mềm'}
+                </span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

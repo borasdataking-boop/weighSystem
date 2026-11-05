@@ -20,23 +20,44 @@ export interface ProductionWeightLog {
 }
 
 export interface ProductionMetrics {
-  totalInWeight: number;       // Tổng lượng nguyên liệu đầu vào (kg)
-  totalOutWeight: number;      // Tổng lượng thành phẩm đầu ra (kg)
-  wipWeight: number;           // Hàng dở dang trên chuyền = totalIn - totalOut (kg)
-  yieldRate: number;           // Hiệu suất thu hồi = (totalOut / totalIn) * 100 (%)
+  totalInWeight: number;       // Khối lượng nguyên liệu đầu vào tiếp nhận gốc (kg)
+  totalOutWeight: number;      // Khối lượng thành phẩm đầu ra hoàn thành xuất xưởng (kg)
+  wipWeight: number;           // Hàng dở dang thực tế trên chuyền = Tổng WIP các công đoạn (kg)
+  yieldRate: number;           // Hiệu suất thu hồi toàn chuyền = (totalOut / totalIn) * 100 (%)
   inCount: number;             // Số mẻ cân IN
   outCount: number;            // Số mẻ cân OUT
   activeBatchesCount: number;  // Số lô đang chạy
+  plannedWeight?: number;      // Khối lượng theo kế hoạch ban đầu (kg)
+  remainingWeight?: number;    // Số kg nguyên liệu còn lại chưa nạp (kg)
+  totalGainWeight?: number;    // Tổng khối lượng tăng trọng từ các bước ngâm quay tôm, tẩm bột (kg)
+  totalLossWeight?: number;    // Tổng khối lượng hao hụt vỏ tôm, tạp chất từ các bước sơ chế (kg)
+  bottleneckCount?: number;    // Số công đoạn đang có hàng đọng
 }
 
 export interface BatchSummary {
   batchId: string;
-  inWeight: number;
-  outWeight: number;
-  wipWeight: number;
-  yieldRate: number;
-  status: 'IN_PROGRESS' | 'COMPLETED' | 'PENDING';
-  lastAction: string;
+  batchName: string;
+  plannedWeight: number;       // Khối lượng kế hoạch ban đầu (kg)
+  inWeight: number;            // Khối lượng nguyên liệu đầu vào tiếp nhận gốc (kg)
+  outWeight: number;           // Khối lượng thành phẩm đầu ra hoàn thành (kg)
+  wipWeight: number;           // Tổng hàng dở dang thực tế = Tổng WIP từng công đoạn (kg)
+  remainingWeight: number;     // Số kg nguyên liệu còn lại chưa làm = max(0, plannedWeight - inWeight) (kg)
+  yieldRate: number;           // Tỷ lệ thu hồi = (outWeight / inWeight) * 100 (%)
+  progressPercent: number;     // Phần trăm tiến độ hoàn thành theo kế hoạch (%)
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'PENDING' | 'CANCELLED';
+  origin?: string;             // Xuất xứ / Nhà cung ứng
+  startDate?: string;          // Ngày bắt đầu sản xuất
+  notes?: string;              // Ghi chú
+  lastAction?: string;         // Thời điểm phát sinh mẻ cân gần nhất
+  isToday: boolean;            // Lô có đang hoạt động/làm trong ngày hôm nay không
+  todayInWeight: number;       // Khối lượng đầu vào (IN) đã cân hôm nay (kg)
+  todayOutWeight: number;      // Khối lượng đầu ra (OUT) đã cân hôm nay (kg)
+  todayLogCount: number;       // Số mẻ cân đã thực hiện hôm nay
+  inCount: number;             // Tổng số mẻ cân IN
+  outCount: number;            // Tổng số mẻ cân OUT
+  totalGainWeight?: number;    // Tổng khối lượng tăng trọng (ngâm quay tôm, tẩm bột...) (kg)
+  totalLossWeight?: number;    // Tổng khối lượng hao hụt (bóc vỏ, luộc...) (kg)
+  activeStagesCount?: number;  // Số công đoạn đang tham gia xử lý
 }
 
 export interface BatchInfo {
@@ -53,13 +74,19 @@ export interface BatchInfo {
 }
 
 export interface StageWiPSummary {
-  processId: string;
-  processName: string;
-  inWeight: number;
-  outWeight: number;
-  wipWeight: number;
-  yieldRate: number;
-  inCount?: number;
-  outCount?: number;
-  lossRate?: number;
+  processId: string;           // Mã công đoạn: CD001, CD002...
+  processName: string;         // Tên công đoạn: Tiếp nhận, Ngâm xử lý phụ gia, Tẩm bột...
+  inWeight: number;            // Khối lượng nạp vào công đoạn (kg)
+  outWeight: number;           // Khối lượng lấy ra khỏi công đoạn (kg)
+  wipWeight: number;           // Hàng dở dang còn đọng tại công đoạn (kg) >= 0
+  yieldRate: number;           // Tỷ lệ thu hồi / định mức công đoạn = (outWeight / inWeight) * 100 (%)
+  weightDiff: number;          // Biến thiên khối lượng = outWeight - inWeight (kg) (+ là tăng trọng, - là hao hụt)
+  gainRate: number;            // Tỷ lệ tăng trọng (%) nếu OUT > IN (vd: Ngâm quay tôm +5%)
+  lossRate: number;            // Tỷ lệ hao hụt (%) nếu OUT < IN (vd: Bóc vỏ sơ chế -20.2%)
+  isGain: boolean;             // Có hiện tượng tăng trọng không (OUT > IN)
+  isLoss: boolean;             // Có hiện tượng hao hụt không (OUT < IN)
+  inCount: number;             // Số mẻ cân nạp vào công đoạn
+  outCount: number;            // Số mẻ cân lấy ra khỏi công đoạn
+  stageType: 'RECEIVING' | 'SOAKING_GAIN' | 'BREADING_GAIN' | 'LOSS_PEEL' | 'END_PRODUCT' | 'GENERAL';
+  statusText: string;          // Trạng thái: 'Tăng trọng (+5kg)', 'Hao hụt (-8.5kg)', 'Đang xử lý', 'Thông suốt'
 }
