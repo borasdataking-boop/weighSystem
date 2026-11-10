@@ -3,7 +3,6 @@ import { Header } from '../components/layout/Header';
 import { BatchProductionHub } from '../components/overview/BatchProductionHub';
 import { ProductionKPICards } from '../components/overview/ProductionKPICards';
 import { ProductionVisualCharts } from '../components/overview/ProductionVisualCharts';
-import { VisualFactoryPipeline } from '../components/overview/VisualFactoryPipeline';
 import { VisualPipelineFlow } from '../components/overview/VisualPipelineFlow';
 import { ProductionLogTable } from '../components/overview/ProductionLogTable';
 import { BatchModal } from '../components/overview/BatchModal';
@@ -30,16 +29,15 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string>('ALL');
 
-  // Mặc định ẩn hoàn toàn bảng nhật ký cân để giao diện gọn gàng
+  // Ngăn quản lý Lô & Nhật ký dạng bảng: Mặc định thu gọn để ưu tiên 100% không gian cho Biểu đồ
+  const [isManagementDrawerOpen, setIsManagementDrawerOpen] = useState<boolean>(false);
   const [isLogTableVisible, setIsLogTableVisible] = useState<boolean>(false);
+  const [isPipelineExpanded, setIsPipelineExpanded] = useState<boolean>(false);
 
-  // Quản lý Modal Lô: Thêm mới, Chỉnh sửa thông tin ban đầu, Xoá lô
+  // Quản lý Modal Lô
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
   const [batchModalMode, setBatchModalMode] = useState<'add' | 'edit' | 'delete'>('add');
   const [editingBatchData, setEditingBatchData] = useState<BatchInfo | null>(null);
-
-  // Mở rộng chi tiết dòng chảy 15 công đoạn (theo yêu cầu on-demand)
-  const [isPipelineExpanded, setIsPipelineExpanded] = useState<boolean>(false);
 
   const [metrics, setMetrics] = useState<ProductionMetrics>({
     totalInWeight: 0,
@@ -66,14 +64,15 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
       ]);
 
       const stgs = procData.stages || [];
+      const mappings = procData.mappings || [];
       setLogs(rawLogs);
       setStages(stgs);
       setStations(stns);
       setProducts(prods);
 
-      setMetrics(logService.getMetrics(selectedBatch, rawLogs));
-      setBatchSummaries(logService.getBatchSummaries(rawLogs));
-      setStageWiPList(logService.getStageWiPSummaries(stgs, selectedBatch, rawLogs));
+      setMetrics(logService.getMetrics(selectedBatch, rawLogs, stgs, mappings));
+      setBatchSummaries(logService.getBatchSummaries(rawLogs, stgs, mappings));
+      setStageWiPList(logService.getStageWiPSummaries(stgs, selectedBatch, rawLogs, mappings));
     } catch (e) {
       console.error('Lỗi khi tải dữ liệu từ database:', e);
     }
@@ -96,7 +95,6 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
     await loadAllData();
   };
 
-  // --- CÁC HÀM XỬ LÝ QUẢN LÝ LÔ ---
   const handleOpenAddBatch = () => {
     setBatchModalMode('add');
     setEditingBatchData(null);
@@ -118,8 +116,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
       {
         id: Date.now().toString(),
         type: 'success',
-        title: batchModalMode === 'add' ? 'Đã tạo Lô sản xuất mới!' : 'Đã cập nhật thông tin Lô!',
-        message: `Mã: ${batch.batchId} - ${batch.batchName}`
+        title: batchModalMode === 'add' ? 'Đã tạo Lô mới!' : 'Đã cập nhật Lô!',
+        message: `${batch.batchId} - ${batch.batchName}`
       }
     ]);
   };
@@ -135,13 +133,12 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
       {
         id: Date.now().toString(),
         type: 'success',
-        title: 'Đã xoá / ngừng hoạt động Lô!',
-        message: `Đã cập nhật thành công lô ${batchIdToDelete}.`
+        title: 'Đã xoá Lô!',
+        message: `Mã ${batchIdToDelete}`
       }
     ]);
   };
 
-  // Chuyển đổi trạng thái nhanh (1-click: Đang làm <-> Đã xong) từ bảng
   const handleToggleBatchStatus = async (batchId: string, newStatus: 'IN_PROGRESS' | 'COMPLETED' | 'PENDING') => {
     await logService.toggleBatchStatus(batchId, newStatus);
     await loadAllData();
@@ -150,192 +147,171 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
       {
         id: Date.now().toString(),
         type: 'success',
-        title: 'Đã cập nhật trạng thái Lô!',
-        message: `Lô ${batchId} hiện chuyển sang: ${
-          newStatus === 'COMPLETED' ? 'Đã làm xong' : newStatus === 'IN_PROGRESS' ? 'Đang làm' : 'Chờ sản xuất'
-        }`
+        title: 'Cập nhật trạng thái Lô',
+        message: `${batchId} → ${newStatus}`
       }
     ]);
   };
 
-  // Xem chi tiết 15 công đoạn của 1 lô cụ thể
   const handleInspectStages = (batchId: string) => {
     setSelectedBatch(batchId);
+    setIsManagementDrawerOpen(true);
     setIsPipelineExpanded(true);
-    setTimeout(() => {
-      const el = document.getElementById('pipeline-stages-section');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    }, 80);
   };
-
-  // Thông tin chi tiết của lô đang được chọn
-  const activeBatchInfo = selectedBatch !== 'ALL' ? logService.getBatchInfo(selectedBatch) : null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
-      {/* 1. Header đỏ thương hiệu Phan Bách */}
+      {/* 1. Header điều hướng chính */}
       <Header activeTab="overview" onTabChange={onNavigate} />
 
-      {/* 2. Main Workspace */}
-      <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
-          <span>Hệ thống</span>
-          <span>/</span>
-          <span className="font-semibold text-slate-700">Tổng quan sản xuất</span>
-        </div>
+      {/* 2. Không gian làm việc - Trọng tâm là Biểu đồ */}
+      <main className="flex-1 max-w-[1440px] w-full mx-auto px-3 sm:px-5 lg:px-6 py-3">
 
-        {/* 3. THANH TIÊU ĐỀ TRUNG TÂM - PHONG CÁCH DOANH NGHIỆP GỌN GÀNG */}
-        <div className="bg-white border border-slate-200/90 rounded-lg px-4 py-3 shadow-2xs mb-4 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold tracking-tight text-slate-900">
-              Tổng quan sản xuất
+        {/* THANH ĐIỀU HƯỚNG TỐI GIẢN (CHỮ SIÊU NHỎ, TẬP TRUNG CHỌN LÔ & TRẠNG THÁI) */}
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <h1 className="text-sm font-bold tracking-tight text-slate-800">
+              Tổng quan biểu đồ
             </h1>
-            <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Hệ thống trực tiếp
+            <span className="text-[10px] text-slate-400 font-mono">
+              Live
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            {selectedBatch !== 'ALL' ? (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Bộ chọn Lô nhỏ gọn */}
+            <div className="flex items-center bg-white border border-slate-200 rounded-md p-0.5 text-[11px]">
               <button
                 type="button"
                 onClick={() => setSelectedBatch('ALL')}
-                className="px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                title="Bỏ lọc, xem toàn bộ nhà máy"
+                className={`px-2 py-0.5 rounded transition-all cursor-pointer font-medium ${
+                  selectedBatch === 'ALL'
+                    ? 'bg-slate-900 text-white font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                <span>Đang lọc: <strong>Lô {selectedBatch}</strong></span>
-                <span className="text-slate-400 font-bold ml-1">✕</span>
+                Toàn xưởng
               </button>
-            ) : (
-              <span className="text-xs text-slate-400 font-medium hidden sm:inline-block">
-                Dữ liệu toàn nhà máy
-              </span>
-            )}
+              {batchSummaries.slice(0, 5).map(b => (
+                <button
+                  key={b.batchId}
+                  type="button"
+                  onClick={() => setSelectedBatch(b.batchId)}
+                  className={`px-2 py-0.5 rounded transition-all cursor-pointer font-mono font-medium ${
+                    selectedBatch === b.batchId
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {b.batchId}
+                </button>
+              ))}
+            </div>
+
+            {/* Nút mở rộng bảng quản trị lô khi cần */}
+            <button
+              type="button"
+              onClick={() => setIsManagementDrawerOpen(prev => !prev)}
+              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer flex items-center gap-1 ${
+                isManagementDrawerOpen
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-600 hover:text-slate-900 border-slate-200'
+              }`}
+              title="Mở bảng số liệu quản trị lô và nhật ký"
+            >
+              <span>Quản trị lô</span>
+              <span className="text-[9px]">{isManagementDrawerOpen ? '▲' : '▼'}</span>
+            </button>
           </div>
         </div>
 
-        {/* THẺ THÔNG TIN LÔ ĐANG CHỌN (NỀN TRẮNG, VIỀN XÁM CHUẨN MỰC) */}
-        {activeBatchInfo && (
-          <div className="bg-white border border-slate-200/90 rounded-lg px-4 py-2.5 shadow-2xs mb-4 flex items-center justify-between flex-wrap gap-2 text-xs">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="font-bold text-white bg-slate-900 px-2 py-0.5 rounded font-mono text-xs">
-                {activeBatchInfo.batchId}
-              </span>
-              <span className="font-bold text-slate-900">
-                {activeBatchInfo.batchName}
-              </span>
-              {activeBatchInfo.plannedWeight && activeBatchInfo.plannedWeight > 0 ? (
-                <span className="text-slate-500">
-                  • KH: <strong className="font-mono text-slate-800 font-bold">{activeBatchInfo.plannedWeight.toLocaleString('vi-VN')} kg</strong>
-                </span>
-              ) : null}
-              {activeBatchInfo.origin && (
-                <span className="text-slate-500">
-                  • Xuất xứ: <span className="text-slate-700 font-medium">{activeBatchInfo.origin}</span>
-                </span>
-              )}
-              {activeBatchInfo.notes && (
-                <span className="text-slate-400 italic">
-                  ({activeBatchInfo.notes})
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${
-                activeBatchInfo.status === 'COMPLETED'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : activeBatchInfo.status === 'PENDING'
-                  ? 'bg-slate-50 text-slate-600 border-slate-200'
-                  : 'bg-slate-100 text-slate-700 border-slate-200'
-              }`}>
-                {activeBatchInfo.status === 'COMPLETED' ? 'Đã hoàn thành' : activeBatchInfo.status === 'PENDING' ? 'Chờ sản xuất' : 'Đang sản xuất'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedBatch('ALL')}
-                className="text-xs text-slate-600 hover:text-slate-900 font-medium cursor-pointer ml-2 hover:underline"
-              >
-                Xem toàn nhà máy
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 4. TẦNG CHÍNH 1: 4 CHỈ SỐ CỐT LÕI & THANH CÂN ĐỐI NGUYÊN LIỆU TRỰC QUAN */}
+        {/* 3. THẺ SỐ LIỆU TỐI GIẢN (CHỮ NHỎ, KHÔNG CHIẾM DIỆN TÍCH) */}
         <ProductionKPICards
           metrics={metrics}
           selectedBatch={selectedBatch}
         />
 
-        {/* 4.1. BIỂU ĐỒ TRỰC QUAN HOÁ DỮ LIỆU SẢN XUẤT (CỘT / TRÒN / VÙNG THEO GIỜ) */}
+        {/* 4. TRUNG TÂM BIỂU ĐỒ - VẼ ĐA DẠNG 8 BIỂU ĐỒ VỚI CHÚ THÍCH SẮC NÉT */}
         <ProductionVisualCharts
           stageWiPList={stageWiPList}
           metrics={metrics}
           logs={logs}
           selectedBatch={selectedBatch}
-        />
-
-        {/* 5. TẦNG CHÍNH 2: TRUNG TÂM THEO DÕI VÀ ĐIỀU HÀNH CÁC LÔ SẢN XUẤT */}
-        <BatchProductionHub
           batchSummaries={batchSummaries}
-          selectedBatch={selectedBatch}
-          onSelectBatch={setSelectedBatch}
-          onOpenAddBatch={handleOpenAddBatch}
-          onOpenEditBatch={handleOpenEditBatchSpecific}
-          onToggleStatus={handleToggleBatchStatus}
-          onInspectStages={handleInspectStages}
+          stations={stations}
+          products={products}
+          stages={stages}
         />
 
-        {/* 6. CHI TIẾT 15 CÔNG ĐOẠN (THU GỌN MẶC ĐỊNH) */}
-        <VisualPipelineFlow
-          stageWiPList={stageWiPList}
-          selectedBatch={selectedBatch}
-          isExpanded={isPipelineExpanded}
-          onToggleExpand={() => setIsPipelineExpanded(prev => !prev)}
-        />
-
-        {/* 7. TẦNG PHỤ THEO YÊU CẦU: NHẬT KÝ CÂN (THU GỌN MẶC ĐỊNH) */}
-        <div className="mb-6">
-          <button
-            type="button"
-            onClick={() => setIsLogTableVisible(prev => !prev)}
-            className="w-full py-3 px-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center justify-between transition-colors cursor-pointer shadow-2xs"
-          >
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-              <span>Nhật ký chi tiết từng lần cân ({logs.length.toLocaleString('vi-VN')} mẻ)</span>
+        {/* 5. KHỐI QUẢN TRỊ DẠNG BẢNG (MẶC ĐỊNH THU GỌN Ở DƯỚI CÙNG) */}
+        {isManagementDrawerOpen && (
+          <div className="mt-6 pt-4 border-t border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Bảng quản lý lô & Chi tiết công đoạn
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsManagementDrawerOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                Thu gọn ▲
+              </button>
             </div>
 
-            <span className="text-slate-500 font-medium text-xs flex items-center gap-1">
-              {isLogTableVisible ? 'Thu gọn ▲' : 'Xem chi tiết ▼'}
-            </span>
-          </button>
+            {/* Quản lý các lô */}
+            <BatchProductionHub
+              batchSummaries={batchSummaries}
+              selectedBatch={selectedBatch}
+              onSelectBatch={setSelectedBatch}
+              onOpenAddBatch={handleOpenAddBatch}
+              onOpenEditBatch={handleOpenEditBatchSpecific}
+              onToggleStatus={handleToggleBatchStatus}
+              onInspectStages={handleInspectStages}
+            />
 
-          {isLogTableVisible && (
-            <div className="mt-3">
-              <ProductionLogTable
-                logs={logs}
-                stages={stages}
-                stations={stations}
-                products={products}
-                selectedBatch={selectedBatch}
-                onSelectBatch={setSelectedBatch}
-                onDeleteLog={handleDeleteLog}
-              />
+            {/* Chi tiết 15 công đoạn */}
+            <VisualPipelineFlow
+              stageWiPList={stageWiPList}
+              selectedBatch={selectedBatch}
+              isExpanded={isPipelineExpanded}
+              onToggleExpand={() => setIsPipelineExpanded(prev => !prev)}
+            />
+
+            {/* Nhật ký cân chi tiết */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setIsLogTableVisible(prev => !prev)}
+                className="w-full py-2.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 flex items-center justify-between transition-colors cursor-pointer shadow-2xs"
+              >
+                <span>Nhật ký từng mẻ cân ({logs.length.toLocaleString('vi-VN')} mẻ)</span>
+                <span className="text-slate-400 text-xs">
+                  {isLogTableVisible ? 'Thu gọn ▲' : 'Xem chi tiết ▼'}
+                </span>
+              </button>
+
+              {isLogTableVisible && (
+                <div className="mt-3">
+                  <ProductionLogTable
+                    logs={logs}
+                    stages={stages}
+                    stations={stations}
+                    products={products}
+                    selectedBatch={selectedBatch}
+                    onSelectBatch={setSelectedBatch}
+                    onDeleteLog={handleDeleteLog}
+                  />
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
       </main>
 
-      {/* Modal Quản Lý Lô (Thêm lô / Sửa thông tin ban đầu / Xoá lô) */}
+      {/* Modal Quản Lý Lô */}
       <BatchModal
         isOpen={isBatchModalOpen}
         mode={batchModalMode}

@@ -32,6 +32,7 @@ export interface ProductionMetrics {
   totalGainWeight?: number;    // Tổng khối lượng tăng trọng từ các bước ngâm quay tôm, tẩm bột (kg)
   totalLossWeight?: number;    // Tổng khối lượng hao hụt vỏ tôm, tạp chất từ các bước sơ chế (kg)
   bottleneckCount?: number;    // Số công đoạn đang có hàng đọng
+  bottleneckStages?: string[]; // Tên các công đoạn đang đọng hàng để quản lý nắm bắt ngay
 }
 
 export interface BatchSummary {
@@ -89,4 +90,6 @@ export interface StageWiPSummary {
   outCount: number;            // Số mẻ cân lấy ra khỏi công đoạn
   stageType: 'RECEIVING' | 'SOAKING_GAIN' | 'BREADING_GAIN' | 'LOSS_PEEL' | 'END_PRODUCT' | 'GENERAL';
   statusText: string;          // Trạng thái: 'Tăng trọng (+5kg)', 'Hao hụt (-8.5kg)', 'Đang xử lý', 'Thông suốt'
+  isStartStage?: boolean;      // Công đoạn đầu vào tiếp nhận
+  isEndStage?: boolean;        // Công đoạn hoàn tất xuất xưởng
 }

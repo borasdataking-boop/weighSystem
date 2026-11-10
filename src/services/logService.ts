@@ -1,5 +1,5 @@
 import { ProductionWeightLog, ProductionMetrics, BatchSummary, StageWiPSummary, WeightIOType, BatchInfo } from '../types/log.types';
-import { ProcessStage } from '../types/process.types';
+import { ProcessStage, ProcessMapping } from '../types/process.types';
 import { stationService } from './stationService';
 import { productService } from './productService';
 
@@ -836,49 +836,164 @@ export const logService = {
   },
 
   /**
-   * Tính toán toàn diện các chỉ số IN, OUT, WiP, % Yield
-   * ĐẶC BIỆT: Phân tách theo từng công đoạn, không tính tổng gộp mù quáng
-   * để tránh sai lệch khi công đoạn có TĂNG TRỌNG (Ngâm quay tôm 100kg -> 105kg)
-   * hoặc HAO HỤT (Sơ chế bóc vỏ tôm 100kg -> 60kg).
+   * Phân tích đồ thị quy trình động (Dynamic Process Flow Topology)
+   * Tự động xác định công đoạn đầu vào (Start Stages) và công đoạn thành phẩm đầu ra (End Stages)
+   * Dựa trên danh sách công đoạn và quan hệ chuyển tiếp (mappings), HOÀN TOÀN KHÔNG CỐ ĐỊNH mã CDxxx.
+   * Khi người dùng thêm, bớt, sửa công đoạn, hệ thống tự động nhận diện và tính toán chuẩn xác.
    */
-  getMetrics(batchId?: string, customLogs?: ProductionWeightLog[]): ProductionMetrics {
+  resolveProcessTopology(
+    stages?: ProcessStage[],
+    mappings?: ProcessMapping[]
+  ): {
+    startStageIds: Set<string>;
+    endStageIds: Set<string>;
+    orderedStages: ProcessStage[];
+  } {
+    let list = stages && stages.length > 0 ? [...stages] : [];
+
+    // Nếu chưa truyền stages, lấy từ localStorage
+    if (list.length === 0 && typeof window !== 'undefined') {
+      try {
+        list = JSON.parse(localStorage.getItem('pb_process_stages_v3') || '[]');
+      } catch (e) {
+        list = [];
+      }
+    }
+
+    // Sắp xếp thứ tự công đoạn theo tiến trình luồng: row trước, col sau (hoặc theo thứ tự khai báo)
+    list.sort((a, b) => {
+      const rowA = a.row ?? 1;
+      const rowB = b.row ?? 1;
+      if (rowA !== rowB) return rowA - rowB;
+      const colA = a.col ?? 1;
+      const colB = b.col ?? 1;
+      return colA - colB;
+    });
+
+    const startStageIds = new Set<string>();
+    const endStageIds = new Set<string>();
+
+    let activeMappings = (mappings || []).filter(m => m.isActive !== false);
+    if (activeMappings.length === 0 && typeof window !== 'undefined') {
+      try {
+        const cached = JSON.parse(localStorage.getItem('pb_process_mappings_v1') || '[]');
+        activeMappings = (cached || []).filter((m: any) => m.isActive !== false);
+      } catch (e) {
+        activeMappings = [];
+      }
+    }
+
+    if (activeMappings.length > 0 && list.length > 0) {
+      // Dùng đồ thị có hướng (Directed Graph):
+      // - Công đoạn không có luồng nào trỏ tới (in-degree == 0): Là công đoạn bắt đầu tiếp nhận nguyên liệu
+      // - Công đoạn không trỏ tới công đoạn nào khác (out-degree == 0): Là công đoạn thành phẩm hoàn tất
+      const inDegree = new Map<string, number>();
+      const outDegree = new Map<string, number>();
+
+      list.forEach(s => {
+        const id = s.processId || s.id || '';
+        inDegree.set(id, 0);
+        outDegree.set(id, 0);
+      });
+
+      activeMappings.forEach(m => {
+        if (m.fromProcessId) {
+          outDegree.set(m.fromProcessId, (outDegree.get(m.fromProcessId) || 0) + 1);
+        }
+        if (m.toProcessId) {
+          inDegree.set(m.toProcessId, (inDegree.get(m.toProcessId) || 0) + 1);
+        }
+      });
+
+      list.forEach(s => {
+        const id = s.processId || s.id || '';
+        if ((inDegree.get(id) || 0) === 0) {
+          startStageIds.add(id);
+        }
+        if ((outDegree.get(id) || 0) === 0) {
+          endStageIds.add(id);
+        }
+      });
+    }
+
+    // Nếu không có mappings hoặc không tìm ra công đoạn đầu/cuối từ đồ thị:
+    // Dựa vào hàng (row) hoặc vị trí đầu/cuối của quy trình
+    if (startStageIds.size === 0 && list.length > 0) {
+      const minRow = Math.min(...list.map(s => s.row ?? 1));
+      list.filter(s => (s.row ?? 1) === minRow).forEach(s => startStageIds.add(s.processId || s.id || ''));
+    }
+
+    if (endStageIds.size === 0 && list.length > 0) {
+      const maxRow = Math.max(...list.map(s => s.row ?? 1));
+      list.filter(s => (s.row ?? 1) === maxRow).forEach(s => endStageIds.add(s.processId || s.id || ''));
+    }
+
+    // Fallback an toàn nếu vẫn rỗng
+    if (startStageIds.size === 0 && list.length > 0) {
+      startStageIds.add(list[0].processId || list[0].id || '');
+    }
+    if (endStageIds.size === 0 && list.length > 0) {
+      endStageIds.add(list[list.length - 1].processId || list[list.length - 1].id || '');
+    }
+
+    return { startStageIds, endStageIds, orderedStages: list };
+  },
+
+  /**
+   * Tính toán toàn diện các chỉ số IN, OUT, WiP, % Yield HOÀN TOÀN ĐỘNG
+   * - Tự động nhận diện công đoạn đầu vào và các công đoạn thành phẩm đầu ra
+   * - Xử lý bóc tách từng công đoạn, không tính gộp mù quáng
+   * - Tự động phân tách công đoạn Tăng trọng vs Hao hụt
+   * - Trả về danh sách bottleneckStages để quản lý nắm rõ quy trình
+   */
+  getMetrics(
+    batchId?: string,
+    customLogs?: ProductionWeightLog[],
+    stages?: ProcessStage[],
+    mappings?: ProcessMapping[]
+  ): ProductionMetrics {
     const allLogs = customLogs || this.getLogs();
     const filtered = batchId && batchId !== 'ALL'
       ? allLogs.filter(l => l.batch_id === batchId)
       : allLogs;
 
-    // Lấy danh sách công đoạn để phân tích từng bước
-    const stages = typeof window !== 'undefined'
-      ? JSON.parse(localStorage.getItem('pb_process_stages_v3') || '[]')
-      : [];
-    const stageWiPList = this.getStageWiPSummaries(stages, batchId, customLogs);
+    // Lấy stageWiPList hoàn toàn động theo stages và mappings
+    const stageWiPList = this.getStageWiPSummaries(stages, batchId, customLogs, mappings);
 
-    // 1. Đầu vào gốc (Tiếp nhận nguyên liệu ban đầu tại CD001 hoặc công đoạn đầu)
-    const cd001 = stageWiPList.find(s => s.processId === 'CD001');
-    let rawInWeight = cd001 ? cd001.inWeight : 0;
+    // 1. Đầu vào gốc (Tổng nguyên liệu nạp vào tại các công đoạn bắt đầu)
+    const startStages = stageWiPList.filter(s => s.isStartStage);
+    let rawInWeight = startStages.reduce((acc, s) => acc + s.inWeight, 0);
+
     if (rawInWeight === 0) {
-      // Nếu không có mẻ cân tại CD001, tìm công đoạn đầu tiên có mẻ cân IN
+      // Nếu các start stages chưa có mẻ cân IN, tìm công đoạn đầu tiên trong luồng có mẻ cân IN
       const firstActive = stageWiPList.find(s => s.inWeight > 0);
       rawInWeight = firstActive ? firstActive.inWeight : 0;
     }
 
-    // 2. Thành phẩm đầu ra hoàn thành xuất xưởng (tại các công đoạn cuối CD006, CD008, CD012..CD015)
-    const endStages = new Set(['CD006', 'CD008', 'CD012', 'CD013', 'CD014', 'CD015']);
-    let finishedOutWeight = stageWiPList
-      .filter(s => endStages.has(s.processId))
-      .reduce((acc, s) => acc + s.outWeight, 0);
+    // 2. Thành phẩm đầu ra hoàn thành xuất xưởng (Tổng OUT tại các công đoạn kết thúc quy trình)
+    const endStages = stageWiPList.filter(s => s.isEndStage);
+    let finishedOutWeight = endStages.reduce((acc, s) => acc + s.outWeight, 0);
 
     if (finishedOutWeight === 0) {
-      finishedOutWeight = stageWiPList.reduce((acc, s) => acc + s.outWeight, 0);
+      // Nếu chưa có mẻ OUT ở bước cuối (lô đang chạy ở giữa), lấy OUT ở công đoạn xa nhất đã hoàn tất
+      const activeOuts = stageWiPList.filter(s => s.outWeight > 0);
+      if (activeOuts.length > 0) {
+        finishedOutWeight = activeOuts[activeOuts.length - 1].outWeight;
+      }
     }
 
-    // 3. Tổng WIP thực tế trên toàn chuyền = Tổng WIP từng công đoạn (KHÔNG bao giờ bị âm hay bị bù trừ bởi tăng trọng)
+    // 3. Tổng WIP thực tế trên toàn chuyền = Tổng WIP từng công đoạn (KHÔNG bao giờ bị âm do tăng trọng)
     const totalWip = stageWiPList.reduce((acc, s) => acc + s.wipWeight, 0);
 
-    // 4. Tổng khối lượng tăng trọng (ngâm quay tôm, tẩm bột) & hao hụt (bóc vỏ, luộc)
+    // 4. Danh sách các công đoạn đang bị đọng hàng (WIP > 0) để người quản lý nắm bắt toàn diện
+    const bottleneckStages = stageWiPList
+      .filter(s => s.wipWeight > 0)
+      .map(s => `${s.processName} (${s.wipWeight.toFixed(1)} kg)`);
+    const bottleneckCount = bottleneckStages.length;
+
+    // 5. Tổng khối lượng tăng trọng & hao hụt
     const totalGain = stageWiPList.filter(s => s.isGain).reduce((acc, s) => acc + (s.outWeight - s.inWeight), 0);
     const totalLoss = stageWiPList.filter(s => s.isLoss).reduce((acc, s) => acc + (s.inWeight - s.outWeight), 0);
-    const bottleneckCount = stageWiPList.filter(s => s.wipWeight > 0).length;
 
     // Số lần cân
     let inCount = 0;
@@ -918,20 +1033,22 @@ export const logService = {
       remainingWeight: Number(remainingWeight.toFixed(3)),
       totalGainWeight: Number(totalGain.toFixed(3)),
       totalLossWeight: Number(totalLoss.toFixed(3)),
-      bottleneckCount
+      bottleneckCount,
+      bottleneckStages
     };
   },
 
   /**
-   * Danh sách tóm tắt toàn diện theo từng Lô hàng (Batch)
-   * Phục vụ trực tiếp 4 yêu cầu cốt lõi của ban điều hành:
-   * 1. Xác định lô nào đang làm hôm nay
-   * 2. Phân loại lô đang còn làm vs lô đã làm xong; hỗ trợ thêm/sửa lô
-   * 3. Tính toán chính xác: Chưa làm (kg), WIP (kg), IN (kg), OUT (kg)
-   *    DỰA TRÊN TỪNG CÔNG ĐOẠN, tránh tính tổng gộp làm sai lệch do Tăng trọng (Ngâm quay tôm) và Hao hụt (Bóc vỏ).
-   * 4. Tính toán tỷ lệ % tiến độ hoàn thành cho thanh tiến độ
+   * Danh sách tóm tắt toàn diện theo từng Lô hàng (Batch) HOÀN TOÀN ĐỘNG
+   * - Hoạt động độc lập với số lượng và mã công đoạn (thêm/bớt thoải mái)
+   * - Tính toán chính xác: Chưa làm (kg), WIP (kg), IN (kg), OUT (kg)
+   * - Tính toán tỷ lệ % tiến độ hoàn thành cho thanh tiến độ
    */
-  getBatchSummaries(customLogs?: ProductionWeightLog[]): BatchSummary[] {
+  getBatchSummaries(
+    customLogs?: ProductionWeightLog[],
+    stages?: ProcessStage[],
+    mappings?: ProcessMapping[]
+  ): BatchSummary[] {
     const logs = customLogs || this.getLogs();
     const batchesInfo = this.getBatchesInfo();
     const infoMap = new Map<string, BatchInfo>();
@@ -955,38 +1072,34 @@ export const logService = {
     });
 
     const todayStr = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
-    const stages = typeof window !== 'undefined'
-      ? JSON.parse(localStorage.getItem('pb_process_stages_v3') || '[]')
-      : [];
-
     const summaries: BatchSummary[] = [];
 
     allBatchIds.forEach(batchId => {
       const info = infoMap.get(batchId);
       const batchLogs = logs.filter(l => l.batch_id === batchId);
 
-      // Phân tích chi tiết theo từng bước công đoạn của riêng lô này
-      const stageList = this.getStageWiPSummaries(stages, batchId, logs);
+      // Phân tích chi tiết theo từng bước công đoạn động của riêng lô này
+      const stageList = this.getStageWiPSummaries(stages, batchId, logs, mappings);
 
-      // 1. Đầu vào gốc (Tiếp nhận nguyên liệu ban đầu tại CD001)
-      const cd001 = stageList.find(s => s.processId === 'CD001');
-      let rawIn = cd001 ? cd001.inWeight : 0;
+      // 1. Đầu vào gốc (Tổng IN của các công đoạn bắt đầu)
+      const startStages = stageList.filter(s => s.isStartStage);
+      let rawIn = startStages.reduce((acc, s) => acc + s.inWeight, 0);
       if (rawIn === 0) {
         const firstActive = stageList.find(s => s.inWeight > 0);
         rawIn = firstActive ? firstActive.inWeight : 0;
       }
 
-      // 2. Thành phẩm đầu ra hoàn thành xuất xưởng
-      const endStages = new Set(['CD006', 'CD008', 'CD012', 'CD013', 'CD014', 'CD015']);
-      let finishedOut = stageList
-        .filter(s => endStages.has(s.processId))
-        .reduce((acc, s) => acc + s.outWeight, 0);
-
+      // 2. Thành phẩm đầu ra hoàn thành xuất xưởng (Tổng OUT của các công đoạn kết thúc)
+      const endStages = stageList.filter(s => s.isEndStage);
+      let finishedOut = endStages.reduce((acc, s) => acc + s.outWeight, 0);
       if (finishedOut === 0) {
-        finishedOut = stageList.reduce((acc, s) => acc + s.outWeight, 0);
+        const activeOuts = stageList.filter(s => s.outWeight > 0);
+        if (activeOuts.length > 0) {
+          finishedOut = activeOuts[activeOuts.length - 1].outWeight;
+        }
       }
 
-      // 3. Tổng WIP trên chuyền = Tổng WIP thực tế từng công đoạn (không bị bù trừ bởi ngâm quay tăng trọng)
+      // 3. Tổng WIP trên chuyền = Tổng WIP thực tế từng công đoạn
       const batchWip = stageList.reduce((acc, s) => acc + s.wipWeight, 0);
 
       // 4. Tổng tăng trọng & hao hụt qua các công đoạn
@@ -1098,40 +1211,37 @@ export const logService = {
   },
 
   /**
-   * Phân bổ hàng dở dang (WiP), Tăng trọng và Hao hụt theo TỪNG CÔNG ĐOẠN chế biến (1..15)
-   * Nhận diện chính xác bước Tăng trọng (Ngâm quay tôm CD005, Tẩm bột CD007)
-   * và bước Hao hụt (Sơ chế bóc vỏ CD004, Tách vỏ CD011).
+   * Phân bổ hàng dở dang (WiP), Tăng trọng và Hao hụt theo TỪNG CÔNG ĐOẠN ĐỘNG
+   * - Hoàn toàn không cố định mã CDxxx: Thêm, sửa, xoá công đoạn thì thuật toán vẫn tự thích ứng
+   * - Tự động phát hiện công đoạn Tăng trọng (khi OUT > IN) và Hao hụt (khi OUT < IN)
    */
-  getStageWiPSummaries(stages: ProcessStage[], selectedBatch?: string, customLogs?: ProductionWeightLog[]): StageWiPSummary[] {
+  getStageWiPSummaries(
+    stages?: ProcessStage[],
+    selectedBatch?: string,
+    customLogs?: ProductionWeightLog[],
+    mappings?: ProcessMapping[]
+  ): StageWiPSummary[] {
     const allLogs = customLogs || this.getLogs();
     const logs = selectedBatch && selectedBatch !== 'ALL'
       ? allLogs.filter(l => l.batch_id === selectedBatch)
       : allLogs;
 
-    // Đảm bảo luôn đủ 15 công đoạn chuẩn nếu danh sách rỗng
-    const actualStages = stages && stages.length > 0 ? stages : [
-      { processId: 'CD001', processName: 'Tiếp nhận nguyên liệu' },
-      { processId: 'CD002', processName: 'Rửa 1 & Phân cỡ sơ bộ' },
-      { processId: 'CD003', processName: 'Xếp khuôn & Định lượng' },
-      { processId: 'CD004', processName: 'Sơ chế (Bóc vỏ & Rút chỉ)' },
-      { processId: 'CD005', processName: 'Ngâm xử lý phụ gia (Ngâm quay tôm)' },
-      { processId: 'CD006', processName: 'Định hình Nobashi / Xẻ bướm' },
-      { processId: 'CD007', processName: 'Tẩm bột chiên xù' },
-      { processId: 'CD008', processName: 'Chiên định hình dầu nóng' },
-      { processId: 'CD009', processName: 'Luộc / Hấp tôm nõn (PD)' },
-      { processId: 'CD010', processName: 'Luộc / Hấp tôm vỏ (HLSO)' },
-      { processId: 'CD011', processName: 'Tách vỏ sau luộc' },
-      { processId: 'CD012', processName: 'Cấp đông xoắn tôm tươi' },
-      { processId: 'CD013', processName: 'Cấp đông xoắn tôm chiên' },
-      { processId: 'CD014', processName: 'Cấp đông IQF tôm tươi' },
-      { processId: 'CD015', processName: 'Cấp đông IQF tôm chín' }
-    ] as any[];
+    // 1. Phân tích đồ thị quy trình động (Topological Resolution)
+    const { startStageIds, endStageIds, orderedStages } = this.resolveProcessTopology(stages, mappings);
 
+    // 2. Tính khối lượng nạp vào (IN) và lấy ra (OUT) của từng công đoạn
     const stageMap = new Map<string, { inWeight: number; outWeight: number; inCount: number; outCount: number }>();
 
-    actualStages.forEach(st => {
+    orderedStages.forEach(st => {
       const sId = st.processId || st.id || '';
       stageMap.set(sId, { inWeight: 0, outWeight: 0, inCount: 0, outCount: 0 });
+    });
+
+    // Bổ sung các processId có trong logs nhưng chưa khai báo trong danh mục
+    logs.forEach(log => {
+      if (log.process_id && !stageMap.has(log.process_id)) {
+        stageMap.set(log.process_id, { inWeight: 0, outWeight: 0, inCount: 0, outCount: 0 });
+      }
     });
 
     logs.forEach(log => {
@@ -1148,20 +1258,18 @@ export const logService = {
     });
 
     const results: StageWiPSummary[] = [];
-    actualStages.forEach(st => {
-      const sId = st.processId || st.id || '';
+
+    // Duyệt qua tất cả công đoạn đã sắp xếp theo thứ tự luồng
+    const allStageIds = Array.from(stageMap.keys());
+    allStageIds.forEach(sId => {
+      const st = orderedStages.find(s => (s.processId || s.id) === sId);
       const data = stageMap.get(sId) || { inWeight: 0, outWeight: 0, inCount: 0, outCount: 0 };
       const inW = Number(data.inWeight.toFixed(3));
       const outW = Number(data.outWeight.toFixed(3));
       const weightDiff = Number((outW - inW).toFixed(3));
 
-      // Phân loại đặc thù từng công đoạn:
-      let stageType: 'RECEIVING' | 'SOAKING_GAIN' | 'BREADING_GAIN' | 'LOSS_PEEL' | 'END_PRODUCT' | 'GENERAL' = 'GENERAL';
-      if (sId === 'CD001') stageType = 'RECEIVING';
-      else if (sId === 'CD005') stageType = 'SOAKING_GAIN'; // Ngâm xử lý phụ gia (Ngâm quay tôm)
-      else if (sId === 'CD007') stageType = 'BREADING_GAIN'; // Tẩm bột chiên xù
-      else if (sId === 'CD004' || sId === 'CD011') stageType = 'LOSS_PEEL'; // Bóc vỏ, tách vỏ
-      else if (['CD012', 'CD013', 'CD014', 'CD015'].includes(sId)) stageType = 'END_PRODUCT';
+      const isStart = startStageIds.has(sId);
+      const isEnd = endStageIds.has(sId);
 
       let yieldRate = 0;
       let gainRate = 0;
@@ -1169,55 +1277,55 @@ export const logService = {
       let isGain = false;
       let isLoss = false;
       let wip = 0;
+      let stageType: StageWiPSummary['stageType'] = 'GENERAL';
       let statusText = 'Chưa hoạt động';
 
-      if (sId === 'CD001') {
-        // 1. CÔNG ĐOẠN TIẾP NHẬN NGUYÊN LIỆU ĐẦU VÀO GỐC (Nhập từ hộ nuôi / nhà cung ứng)
+      if (isStart) {
+        // CÔNG ĐOẠN ĐẦU VÀO TIẾP NHẬN NGUYÊN LIỆU GỐC
+        stageType = 'RECEIVING';
         yieldRate = 100;
-        isGain = false;
-        isLoss = false;
-        gainRate = 0;
-        lossRate = 0;
         wip = 0;
         statusText = inW > 0 ? `Tiếp nhận nguyên liệu (${inW.toFixed(1)} kg)` : 'Chưa nhận nguyên liệu';
-      } else if (stageType === 'END_PRODUCT' && inW === 0 && outW > 0) {
-        // 2. CÔNG ĐOẠN XUẤT THÀNH PHẨM HOÀN THÀNH (Cấp đông xoắn, IQF)
+      } else if (isEnd && inW === 0 && outW > 0) {
+        // CÔNG ĐOẠN THÀNH PHẨM XUẤT XƯỞNG
+        stageType = 'END_PRODUCT';
         yieldRate = 100;
-        isGain = false;
-        isLoss = false;
-        gainRate = 0;
-        lossRate = 0;
         wip = 0;
         statusText = `Xuất thành phẩm (${outW.toFixed(1)} kg)`;
       } else if (inW > 0) {
         yieldRate = Number(((outW / inW) * 100).toFixed(1));
 
         if (outW > inW) {
-          // 3. CÔNG ĐOẠN TĂNG TRỌNG (Ngâm quay tôm CD005, Tẩm bột CD007)
+          // HIỆN TƯỢNG TĂNG TRỌNG (Ngâm quay tôm, tẩm bột, bổ sung phụ gia)
           isGain = true;
           gainRate = Number((((outW - inW) / inW) * 100).toFixed(1));
-          isLoss = false;
-          lossRate = 0;
-          // Mẻ đã xuất ra hết khỏi máy và tăng thêm trọng lượng -> Không còn hàng đọng trong máy
-          wip = 0;
+          stageType = 'SOAKING_GAIN';
+          wip = 0; // Mẻ đã lấy ra khỏi máy và tăng thêm trọng lượng -> Không còn hàng đọng
           statusText = `Tăng trọng (+${(outW - inW).toFixed(1)} kg • +${gainRate}%)`;
         } else if (outW < inW) {
-          // 4. CÔNG ĐOẠN HAO HỤT (Bóc vỏ rút chỉ CD004, Tách vỏ CD011, Luộc)
-          isGain = false;
-          gainRate = 0;
+          // HIỆN TƯỢNG HAO HỤT HOẶC CÒN HÀNG ĐỌNG TRÊN CHUYỀN
           isLoss = true;
           lossRate = Number((((inW - outW) / inW) * 100).toFixed(1));
+          stageType = 'LOSS_PEEL';
 
-          // Nếu là bóc vỏ (CD004) mà tỷ lệ thịt tôm ra đã xấp xỉ định mức chuẩn (>= 58%): mẻ đã bóc xong, phần thiếu là vỏ tôm thải bỏ
-          if ((sId === 'CD004' && yieldRate >= 58) || (sId === 'CD011' && yieldRate >= 65)) {
+          // Tự động nhận diện công đoạn có tính chất hao hụt phụ phẩm (bóc vỏ, tách vỏ, làm sạch, sơ chế)
+          const nameLower = (st?.processName || st?.flowTitle || '').toLowerCase();
+          const isPeelOrLossStage = nameLower.includes('bóc') ||
+            nameLower.includes('tách') ||
+            nameLower.includes('peel') ||
+            nameLower.includes('sơ chế') ||
+            nameLower.includes('rút chỉ');
+
+          // Nếu là bước bóc tách vỏ mà tỷ lệ thu hồi đã đạt định mức (>= 50%): mẻ đã hoàn tất, phần hụt là vỏ thải bỏ
+          if (isPeelOrLossStage && yieldRate >= 50) {
             wip = 0;
-            statusText = `Hao hụt vỏ (-${(inW - outW).toFixed(1)} kg • -${lossRate}%)`;
+            statusText = `Hao hụt phụ phẩm (-${(inW - outW).toFixed(1)} kg • -${lossRate}%)`;
           } else {
             wip = Math.max(0, Number((inW - outW).toFixed(3)));
             statusText = wip > 0 ? `Đang xử lý (${wip.toFixed(1)} kg đọng)` : `Hao hụt (-${lossRate}%)`;
           }
         } else {
-          // 5. BẢO TOÀN TRỌNG LƯỢNG
+          // BẢO TOÀN TRỌNG LƯỢNG (IN == OUT)
           yieldRate = 100;
           wip = 0;
           statusText = 'Bảo toàn (100%)';
@@ -1232,7 +1340,7 @@ export const logService = {
 
       results.push({
         processId: sId,
-        processName: st.processName || st.name || sId,
+        processName: st?.processName || st?.name || `Công đoạn ${sId}`,
         inWeight: inW,
         outWeight: outW,
         wipWeight: wip,
@@ -1245,7 +1353,9 @@ export const logService = {
         inCount: data.inCount,
         outCount: data.outCount,
         stageType,
-        statusText
+        statusText,
+        isStartStage: isStart,
+        isEndStage: isEnd
       });
     });
 

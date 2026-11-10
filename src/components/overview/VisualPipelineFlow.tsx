@@ -43,7 +43,7 @@ export const VisualPipelineFlow: React.FC<VisualPipelineFlowProps> = ({
       >
         <div className="flex items-center gap-2 flex-wrap text-xs sm:text-sm">
           <span className="font-bold text-slate-900">
-            Chi tiết 15 công đoạn {selectedBatch !== 'ALL' ? `(Lô ${selectedBatch})` : ''}
+            Chi tiết {stageWiPList.length} công đoạn quy trình {selectedBatch !== 'ALL' ? `(Lô ${selectedBatch})` : ''}
           </span>
 
           {stagesWithWip > 0 ? (
