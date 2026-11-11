@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
@@ -8,18 +7,12 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  AreaChart,
-  Area,
-  ComposedChart,
   Line,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
+  ComposedChart,
   ReferenceLine
 } from 'recharts';
 import {
@@ -41,19 +34,73 @@ interface ProductionVisualChartsProps {
   stations?: StationWeigh[];
   products?: ProductItem[];
   stages?: ProcessStage[];
+  onSelectBatch?: (batchId: string) => void;
 }
 
-const COLORS = [
+// Bảng màu giao diện chuẩn phong cách cũ
+const BATCH_COLORS = [
   '#2563EB', // Blue
   '#059669', // Emerald
   '#D97706', // Amber
   '#7C3AED', // Violet
   '#DB2777', // Pink
   '#0891B2', // Cyan
-  '#4F46E5', // Indigo
   '#EA580C', // Orange
+  '#4F46E5', // Indigo
   '#64748B'  // Slate
 ];
+
+const PRODUCT_COLORS = [
+  '#0284C7', // Sky
+  '#10B981', // Emerald
+  '#F59E0B', // Amber
+  '#8B5CF6', // Purple
+  '#EC4899', // Pink
+  '#94A3B8'  // Slate
+];
+
+// Nút biểu tượng Zoom ở góc phải từng biểu đồ
+const ZoomIconButton: React.FC<{
+  isExpanded: boolean;
+  onToggle: () => void;
+}> = ({ isExpanded, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className={`p-1.5 rounded transition-all cursor-pointer ${
+      isExpanded
+        ? 'text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200'
+        : 'text-slate-400 hover:text-slate-800 hover:bg-slate-100'
+    }`}
+    title={isExpanded ? 'Thu nhỏ biểu đồ' : 'Phóng to biểu đồ'}
+  >
+    {isExpanded ? (
+      /* Biểu tượng thu nhỏ (mũi tên hướng vào tâm) */
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+      </svg>
+    ) : (
+      /* Biểu tượng phóng to (mũi tên hướng ra 4 góc) */
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+      </svg>
+    )}
+  </button>
+);
+
+// Hàm lấy định mức chuẩn % theo từng công đoạn kỹ thuật chế biến tôm
+const getStandardNormRate = (stageId: string, stageName?: string): number => {
+  const id = stageId.toUpperCase();
+  const name = (stageName || '').toLowerCase();
+  if (id === 'CD004' || name.includes('bóc vỏ') || name.includes('rút chỉ') || name.includes('peel')) return 60; // Bóc vỏ hao hụt ~40%
+  if (id === 'CD005' || name.includes('ngâm') || name.includes('phụ gia') || name.includes('soak')) return 105; // Ngâm quay tăng trọng +5%
+  if (id === 'CD007' || name.includes('tẩm bột') || name.includes('bread')) return 120; // Tẩm bột tăng trọng +20%
+  if (id === 'CD009' || id === 'CD010' || name.includes('luộc') || name.includes('hấp') || name.includes('cook')) return 88; // Luộc hao hụt nước ~12%
+  if (id === 'CD011' || name.includes('tách vỏ')) return 70; // Tách vỏ sau luộc
+  return 100; // Bảo toàn mặc định
+};
+
+type ChartKey = 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'c6';
 
 export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
   stageWiPList,
@@ -61,247 +108,121 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
   logs,
   selectedBatch,
   batchSummaries = [],
-  products = []
+  products = [],
+  onSelectBatch
 }) => {
-  // Bộ lọc xem từng biểu đồ hoặc xem toàn bộ lưới
-  const [activeFilter, setActiveFilter] = useState<'all' | 'stages' | 'pie' | 'timeline' | 'diff' | 'batches' | 'cluster' | 'rate' | 'products'>('all');
+  const isOverallMode = selectedBatch === 'ALL';
+
+  // Trạng thái biểu đồ đang phóng to (null: hiển thị tất cả; 'c1'..'c6': đóng các biểu đồ khác lại và mở rộng riêng biểu đồ đó)
+  const [focusedChart, setFocusedChart] = useState<ChartKey | null>(null);
 
   const formatKg = (val: number) => {
     return val.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   };
 
-  // -------------------------------------------------------------
-  // 1. BIỂU ĐỒ CỘT CÁC CÔNG ĐOẠN (IN / OUT / WIP)
-  // -------------------------------------------------------------
-  const barData = useMemo(() => {
+  const customTooltipStyle = {
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '6px',
+    color: '#F8FAFC',
+    fontSize: '11px',
+    padding: '7px 10px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+  };
+
+  // =============================================================
+  // DỮ LIỆU BIỂU ĐỒ TỔNG QUÁT (5 & 6)
+  // =============================================================
+  const chart5Data = useMemo(() => {
+    if (!batchSummaries || batchSummaries.length === 0) {
+      return [{
+        batchId: 'NONE',
+        name: 'Chưa có lô',
+        fullName: 'Chưa có dữ liệu lô',
+        INPUT: metrics.totalInWeight,
+        OUTPUT: metrics.totalOutWeight,
+        WIP: metrics.wipWeight
+      }];
+    }
+
+    return batchSummaries.map(b => ({
+      batchId: b.batchId,
+      name: b.batchId,
+      fullName: b.batchName || `Lô ${b.batchId}`,
+      INPUT: Number(b.inWeight.toFixed(1)),
+      OUTPUT: Number(b.outWeight.toFixed(1)),
+      WIP: Number(b.wipWeight.toFixed(1)),
+      planned: b.plannedWeight
+    }));
+  }, [batchSummaries, metrics]);
+
+  const chart6Data = useMemo(() => {
+    if (!batchSummaries || batchSummaries.length === 0) {
+      return [{
+        name: 'Toàn xưởng',
+        batchId: 'ALL',
+        value: metrics.totalInWeight > 0 ? metrics.totalInWeight : 1
+      }];
+    }
+
+    const items = batchSummaries
+      .map(b => ({
+        batchId: b.batchId,
+        name: b.batchId,
+        fullName: b.batchName || `Lô ${b.batchId}`,
+        value: Number((b.inWeight > 0 ? b.inWeight : (b.outWeight > 0 ? b.outWeight : b.plannedWeight || 0)).toFixed(1))
+      }))
+      .filter(item => item.value > 0);
+
+    return items.length > 0 ? items : [{ name: 'Chưa có mẻ', batchId: 'NONE', value: 1 }];
+  }, [batchSummaries, metrics]);
+
+  const totalBatchKg = useMemo(() => {
+    return chart6Data.reduce((acc, cur) => acc + cur.value, 0);
+  }, [chart6Data]);
+
+  // =============================================================
+  // DỮ LIỆU BIỂU ĐỒ CỦA TỪNG LÔ (1, 2, 3, 4)
+  // =============================================================
+  const chart1Data = useMemo(() => {
     const active = stageWiPList.filter(s => s.inWeight > 0 || s.outWeight > 0 || s.wipWeight > 0);
     const list = active.length > 0 ? active : stageWiPList;
 
     return list.map(s => ({
       name: s.processId,
       fullName: s.processName,
-      'Vào (IN)': Number(s.inWeight.toFixed(1)),
-      'Ra (OUT)': Number(s.outWeight.toFixed(1)),
-      'Đọng (WIP)': Number(s.wipWeight.toFixed(1))
+      Input: Number(s.inWeight.toFixed(1)),
+      Output: Number(s.outWeight.toFixed(1)),
+      WIP: Number(s.wipWeight.toFixed(1))
     }));
   }, [stageWiPList]);
 
-  // -------------------------------------------------------------
-  // 2. BIỂU ĐỒ VÀNH KHUYÊN - CÂN BẰNG THÀNH PHẨM / TỒN / HAO HỤT
-  // -------------------------------------------------------------
-  const pieData = useMemo(() => {
-    const totalIn = metrics.totalInWeight || 1;
-    const out = metrics.totalOutWeight;
-    const wip = metrics.wipWeight;
-    const loss = Math.max(0, totalIn - out - wip);
+  const chart2Data = useMemo(() => {
+    const active = stageWiPList.filter(s => s.inWeight > 0 || s.outWeight > 0);
+    const list = active.length > 0 ? active : stageWiPList;
 
-    return [
-      { name: 'Thành phẩm ra', value: Number(out.toFixed(1)), color: '#059669' },
-      { name: 'Đang đọng (WIP)', value: Number(wip.toFixed(1)), color: '#D97706' },
-      { name: 'Hao hụt sơ chế', value: Number(loss.toFixed(1)), color: '#94A3B8' }
-    ].filter(d => d.value > 0);
-  }, [metrics]);
+    return list.map(s => {
+      const actualYield = s.inWeight > 0 ? Number(((s.outWeight / s.inWeight) * 100).toFixed(1)) : 0;
+      const standardRate = getStandardNormRate(s.processId, s.processName);
 
-  // -------------------------------------------------------------
-  // 3. BIỂU ĐỒ VÙNG - SẢN LƯỢNG THEO KHUNG GIỜ
-  // -------------------------------------------------------------
-  const timelineData = useMemo(() => {
-    const hourlyMap: { [hour: string]: { inWeight: number; outWeight: number } } = {
-      '07:00': { inWeight: 0, outWeight: 0 },
-      '09:00': { inWeight: 0, outWeight: 0 },
-      '11:00': { inWeight: 0, outWeight: 0 },
-      '13:00': { inWeight: 0, outWeight: 0 },
-      '15:00': { inWeight: 0, outWeight: 0 },
-      '17:00': { inWeight: 0, outWeight: 0 },
-      '19:00': { inWeight: 0, outWeight: 0 }
-    };
-
-    logs.forEach(log => {
-      const net = log.net_weight ?? (log.value_weight - log.tare_weight);
-      if (!log.time_action) return;
-      const date = new Date(log.time_action);
-      const h = date.getHours();
-
-      let slot = '07:00';
-      if (h >= 19) slot = '19:00';
-      else if (h >= 17) slot = '17:00';
-      else if (h >= 15) slot = '15:00';
-      else if (h >= 13) slot = '13:00';
-      else if (h >= 11) slot = '11:00';
-      else if (h >= 9) slot = '09:00';
-      else slot = '07:00';
-
-      if (log.type_weight === 'IN') {
-        hourlyMap[slot].inWeight += net;
-      } else {
-        hourlyMap[slot].outWeight += net;
-      }
-    });
-
-    return Object.keys(hourlyMap).map(k => ({
-      hour: k,
-      'Sản lượng vào': Number(hourlyMap[k].inWeight.toFixed(1)),
-      'Sản lượng ra': Number(hourlyMap[k].outWeight.toFixed(1))
-    }));
-  }, [logs]);
-
-  // -------------------------------------------------------------
-  // 4. BIỂU ĐỒ BIẾN THIÊN: TĂNG TRỌNG (+) & HAO HỤT (-)
-  // -------------------------------------------------------------
-  const diffData = useMemo(() => {
-    return stageWiPList
-      .filter(s => s.inWeight > 0 || s.outWeight > 0)
-      .map(s => {
-        const delta = Number((s.outWeight - s.inWeight).toFixed(1));
-        return {
-          name: s.processId,
-          fullName: s.processName,
-          diff: delta,
-          gain: delta > 0 ? delta : 0,
-          loss: delta < 0 ? Math.abs(delta) : 0,
-          isGain: delta >= 0
-        };
-      });
-  }, [stageWiPList]);
-
-  // -------------------------------------------------------------
-  // 5. BIỂU ĐỒ TIẾN ĐỘ THEO LÔ HÀNG
-  // -------------------------------------------------------------
-  const batchData = useMemo(() => {
-    if (!batchSummaries || batchSummaries.length === 0) {
-      return [{
-        name: selectedBatch !== 'ALL' ? selectedBatch : 'Toàn xưởng',
-        'Thành phẩm (OUT)': Number(metrics.totalOutWeight.toFixed(1)),
-        'Đang làm (WIP)': Number(metrics.wipWeight.toFixed(1)),
-        'Còn lại': Number(Math.max(0, (metrics.plannedWeight || 0) - metrics.totalInWeight).toFixed(1))
-      }];
-    }
-
-    return batchSummaries.slice(0, 8).map(b => ({
-      name: b.batchId,
-      fullName: b.batchName,
-      'Thành phẩm (OUT)': Number(b.outWeight.toFixed(1)),
-      'Đang làm (WIP)': Number(b.wipWeight.toFixed(1)),
-      'Còn lại': Number((b.remainingWeight || 0).toFixed(1))
-    }));
-  }, [batchSummaries, metrics, selectedBatch]);
-
-  // -------------------------------------------------------------
-  // 6. BIỂU ĐỒ RADAR 4 CỤM NHÀ MÁY
-  // -------------------------------------------------------------
-  const clusterData = useMemo(() => {
-    const list = stageWiPList;
-    const n = list.length;
-    if (n === 0) {
-      return [
-        { subject: 'Tiếp nhận', 'Tải trọng (kg)': 0, fullMark: 100 },
-        { subject: 'Sơ chế & Xử lý', 'Tải trọng (kg)': 0, fullMark: 100 },
-        { subject: 'Chế biến nhiệt', 'Tải trọng (kg)': 0, fullMark: 100 },
-        { subject: 'Cấp đông đóng gói', 'Tải trọng (kg)': 0, fullMark: 100 }
-      ];
-    }
-
-    const q1 = Math.max(1, Math.ceil(n / 4));
-    const q2 = Math.max(q1 + 1, Math.ceil((n * 2) / 4));
-    const q3 = Math.max(q2 + 1, Math.ceil((n * 3) / 4));
-
-    const clusters = [
-      { cluster: 'C1: Tiếp nhận', items: list.slice(0, q1), weight: 0 },
-      { cluster: 'C2: Phụ gia & Xử lý', items: list.slice(q1, q2), weight: 0 },
-      { cluster: 'C3: Chế biến nhiệt', items: list.slice(q2, q3), weight: 0 },
-      { cluster: 'C4: Cấp đông & Xuất', items: list.slice(q3), weight: 0 }
-    ];
-
-    clusters.forEach(cl => {
-      cl.weight = cl.items.reduce((acc, st) => acc + st.inWeight + st.outWeight, 0);
-    });
-
-    const maxWeight = Math.max(...clusters.map(x => x.weight), 50);
-
-    return clusters.map(c => ({
-      subject: c.cluster,
-      'Tải trọng (kg)': Number(c.weight.toFixed(1)),
-      fullMark: maxWeight * 1.2
-    }));
-  }, [stageWiPList]);
-
-  // -------------------------------------------------------------
-  // 7. BIỂU ĐỒ TẦN SUẤT & SẢN LƯỢNG MỖI MẺ
-  // -------------------------------------------------------------
-  const rateData = useMemo(() => {
-    const slots: { [hour: string]: { count: number; totalKg: number } } = {
-      '07:00': { count: 0, totalKg: 0 },
-      '09:00': { count: 0, totalKg: 0 },
-      '11:00': { count: 0, totalKg: 0 },
-      '13:00': { count: 0, totalKg: 0 },
-      '15:00': { count: 0, totalKg: 0 },
-      '17:00': { count: 0, totalKg: 0 },
-      '19:00': { count: 0, totalKg: 0 }
-    };
-
-    logs.forEach(log => {
-      const net = log.net_weight ?? (log.value_weight - log.tare_weight);
-      if (!log.time_action) return;
-      const h = new Date(log.time_action).getHours();
-
-      let slot = '07:00';
-      if (h >= 19) slot = '19:00';
-      else if (h >= 17) slot = '17:00';
-      else if (h >= 15) slot = '15:00';
-      else if (h >= 13) slot = '13:00';
-      else if (h >= 11) slot = '11:00';
-      else if (h >= 9) slot = '09:00';
-      else slot = '07:00';
-
-      slots[slot].count += 1;
-      slots[slot].totalKg += net;
-    });
-
-    return Object.keys(slots).map(k => {
-      const count = slots[k].count;
-      const avg = count > 0 ? Number((slots[k].totalKg / count).toFixed(1)) : 0;
       return {
-        hour: k,
-        'Số mẻ cân': count,
-        'Kg / mẻ': avg
+        name: s.processId,
+        fullName: s.processName,
+        'Thực tế (%)': actualYield,
+        'Định mức chuẩn (%)': standardRate,
+        inW: s.inWeight,
+        outW: s.outWeight
       };
     });
-  }, [logs]);
+  }, [stageWiPList]);
 
-  // -------------------------------------------------------------
-  // 8. BIỂU ĐỒ CƠ CẤU THÀNH PHẨM CUỐI (CHỈ LẤY SẢN PHẨM CUỐI XUẤT XƯỞNG)
-  // -------------------------------------------------------------
-  const productShareData = useMemo(() => {
-    // 1. Xác định tập hợp công đoạn thành phẩm cuối động
-    const endStageIds = new Set(
-      stageWiPList
-        .filter(s => s.isEndStage || s.stageType === 'END_PRODUCT')
-        .map(s => s.processId)
-    );
-    if (endStageIds.size === 0) {
-      ['CD012', 'CD013', 'CD014', 'CD015'].forEach(id => endStageIds.add(id));
-    }
-
-    // 2. Xác định các sản phẩm được phân loại là thành phẩm (FINISHED)
-    const finishedProductIds = new Set(
-      products.filter(p => p.type === 'FINISHED').map(p => p.id)
-    );
-
-    // 3. Chỉ lọc các mẻ cân thành phẩm cuối:
-    // Ưu tiên mẻ OUT xuất xưởng tại các công đoạn kết thúc hoặc mẻ của sản phẩm thành phẩm FINISHED
-    let endLogs = logs.filter(log => {
-      const isEnd = endStageIds.has(log.process_id) || finishedProductIds.has(log.product_id);
-      return isEnd && log.type_weight === 'OUT';
-    });
-
-    // Nếu chưa phát sinh mẻ OUT xuất xưởng, lấy mẻ cân nhập vào các công đoạn cuối
-    if (endLogs.length === 0) {
-      endLogs = logs.filter(log => endStageIds.has(log.process_id) || finishedProductIds.has(log.product_id));
-    }
+  const chart3Data = useMemo(() => {
+    const outLogs = logs.filter(l => l.type_weight === 'OUT');
+    const targetLogs = outLogs.length > 0 ? outLogs : logs;
 
     const pMap: { [pId: string]: number } = {};
-    endLogs.forEach(log => {
-      const p = log.product_id || 'SP-THANH-PHAM';
+    targetLogs.forEach(log => {
+      const p = log.product_id || 'SP-KHAC';
       const net = log.net_weight ?? (log.value_weight - log.tare_weight);
       pMap[p] = (pMap[p] || 0) + net;
     });
@@ -318,466 +239,623 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
       .filter(x => x.value > 0)
       .sort((a, b) => b.value - a.value);
 
-    return entries.slice(0, 8);
-  }, [logs, products, stageWiPList]);
+    if (entries.length <= 4) {
+      return entries;
+    }
 
-  // Tooltip Style chuẩn công nghiệp
-  const customTooltipStyle = {
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
-    borderRadius: '6px',
-    border: 'none',
-    fontSize: '11px',
-    padding: '7px 10px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.18)'
+    const top4 = entries.slice(0, 4);
+    const rest = entries.slice(4);
+    const restTotal = Number(rest.reduce((acc, cur) => acc + cur.value, 0).toFixed(1));
+
+    return [
+      ...top4,
+      {
+        name: 'SP5 (Các SP còn lại)',
+        code: 'SP-REST',
+        value: restTotal
+      }
+    ];
+  }, [logs, products]);
+
+  const totalProductKg = useMemo(() => {
+    return chart3Data.reduce((acc, cur) => acc + cur.value, 0);
+  }, [chart3Data]);
+
+  const chart4Data = useMemo(() => {
+    const active = stageWiPList.filter(s => s.inWeight > 0 || s.outWeight > 0);
+    const list = active.length > 0 ? active : stageWiPList;
+
+    return list.map(s => {
+      const goodKg = Number(s.outWeight.toFixed(1));
+      const wasteKg = Number(Math.max(0, s.inWeight - s.outWeight).toFixed(1));
+
+      return {
+        name: s.processId,
+        fullName: s.processName,
+        'Hàng đạt': goodKg,
+        'Hàng thải / Phế phẩm': wasteKg,
+        total: Number((goodKg + wasteKg).toFixed(1))
+      };
+    });
+  }, [stageWiPList]);
+
+  // Kiểm tra một biểu đồ có được hiển thị không
+  const isVisible = (key: ChartKey) => {
+    return focusedChart === null || focusedChart === key;
   };
 
-  const show = (chartId: string) => activeFilter === 'all' || activeFilter === chartId;
+  // =============================================================
+  // RENDER COMPONENT BIỂU ĐỒ 1: CỘT THEO CÔNG ĐOẠN
+  // =============================================================
+  const renderChart1Card = () => {
+    const isExpanded = focusedChart === 'c1';
+
+    return (
+      <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs transition-all ${
+        isExpanded ? 'col-span-full' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+            <h3 className="text-xs font-bold text-slate-900">
+              1) Biểu đồ cột (theo từng công đoạn)
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-slate-400">
+              X: Công đoạn • Y: kg
+            </span>
+            <ZoomIconButton
+              isExpanded={isExpanded}
+              onToggle={() => setFocusedChart(isExpanded ? null : 'c1')}
+            />
+          </div>
+        </div>
+
+        <div className={`w-full ${isExpanded ? 'h-[400px]' : 'h-[260px]'}`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chart1Data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
+              <XAxis dataKey="name" stroke="#64748B" fontSize={isExpanded ? 12 : 11} tickLine={false} />
+              <YAxis stroke="#64748B" fontSize={isExpanded ? 12 : 11} tickLine={false} />
+              <Tooltip
+                contentStyle={customTooltipStyle}
+                formatter={(v: any, n: any) => [`${formatKg(Number(v))} kg`, n]}
+                labelFormatter={(label: any) => {
+                  const f = stageWiPList.find(s => s.processId === label);
+                  return `${label} • ${f?.processName || ''}`;
+                }}
+              />
+              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
+              <Bar dataKey="Input" fill="#2563EB" radius={[2, 2, 0, 0]} maxBarSize={isExpanded ? 32 : 16} />
+              <Bar dataKey="Output" fill="#059669" radius={[2, 2, 0, 0]} maxBarSize={isExpanded ? 32 : 16} />
+              <Bar dataKey="WIP" fill="#D97706" radius={[2, 2, 0, 0]} maxBarSize={isExpanded ? 32 : 16} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {isExpanded && (
+          <div className="mt-4 pt-3 border-t border-slate-100 overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="text-slate-500 border-b border-slate-100">
+                  <th className="py-1">Mã CĐ</th>
+                  <th className="py-1">Tên công đoạn</th>
+                  <th className="py-1 text-right text-blue-600">Vào (Input)</th>
+                  <th className="py-1 text-right text-emerald-600">Ra (Output)</th>
+                  <th className="py-1 text-right text-amber-600">Tồn đọng (WIP)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chart1Data.map(item => (
+                  <tr key={item.name} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="py-1.5 font-mono font-bold text-slate-800">{item.name}</td>
+                    <td className="py-1.5 text-slate-600">{item.fullName}</td>
+                    <td className="py-1.5 text-right font-mono font-medium text-blue-700">{formatKg(item.Input)} kg</td>
+                    <td className="py-1.5 text-right font-mono font-medium text-emerald-700">{formatKg(item.Output)} kg</td>
+                    <td className="py-1.5 text-right font-mono font-medium text-amber-700">{formatKg(item.WIP)} kg</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // =============================================================
+  // RENDER COMPONENT BIỂU ĐỒ 2: TỶ LỆ THÀNH PHẨM HAO HỤT
+  // =============================================================
+  const renderChart2Card = () => {
+    const isExpanded = focusedChart === 'c2';
+
+    return (
+      <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs transition-all ${
+        isExpanded ? 'col-span-full' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-600" />
+            <h3 className="text-xs font-bold text-slate-900">
+              2) Tỷ lệ thành phẩm hao hụt
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-[10px] font-mono mr-1">
+              <span className="text-blue-600 font-semibold">■ Thực tế</span>
+              <span className="text-rose-600 font-semibold">— Định mức</span>
+            </div>
+            <ZoomIconButton
+              isExpanded={isExpanded}
+              onToggle={() => setFocusedChart(isExpanded ? null : 'c2')}
+            />
+          </div>
+        </div>
+
+        <div className={`w-full ${isExpanded ? 'h-[400px]' : 'h-[260px]'}`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chart2Data} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
+              <XAxis dataKey="name" stroke="#64748B" fontSize={isExpanded ? 12 : 11} tickLine={false} />
+              <YAxis
+                stroke="#64748B"
+                fontSize={isExpanded ? 12 : 11}
+                tickLine={false}
+                domain={[0, 140]}
+                ticks={[0, 40, 60, 80, 100, 120, 140]}
+              />
+              <ReferenceLine y={100} stroke="#94A3B8" strokeDasharray="3 3" />
+              <Tooltip
+                contentStyle={customTooltipStyle}
+                formatter={(v: any, n: any) => [`${Number(v)}%`, n]}
+                labelFormatter={(label: any) => {
+                  const f = stageWiPList.find(s => s.processId === label);
+                  return `${label} • ${f?.processName || ''}`;
+                }}
+              />
+              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
+              <Bar dataKey="Thực tế (%)" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={isExpanded ? 34 : 22} />
+              <Line
+                type="monotone"
+                dataKey="Định mức chuẩn (%)"
+                stroke="#E11D48"
+                strokeWidth={isExpanded ? 3 : 2.5}
+                dot={{ r: isExpanded ? 5 : 4, fill: '#E11D48', strokeWidth: 1, stroke: '#FFFFFF' }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        {isExpanded && (
+          <div className="mt-4 pt-3 border-t border-slate-100 overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="text-slate-500 border-b border-slate-100">
+                  <th className="py-1">Công đoạn</th>
+                  <th className="py-1 text-right">Khối lượng Vào</th>
+                  <th className="py-1 text-right">Khối lượng Ra</th>
+                  <th className="py-1 text-right text-blue-600 font-bold">Thực tế (%)</th>
+                  <th className="py-1 text-right text-rose-600 font-bold">Định mức (%)</th>
+                  <th className="py-1 text-right">Đánh giá chênh lệch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chart2Data.map(item => {
+                  const diff = Number((item['Thực tế (%)'] - item['Định mức chuẩn (%)']).toFixed(1));
+                  return (
+                    <tr key={item.name} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-1.5 font-medium text-slate-800">{item.name} - {item.fullName}</td>
+                      <td className="py-1.5 text-right font-mono text-slate-600">{formatKg(item.inW)} kg</td>
+                      <td className="py-1.5 text-right font-mono text-slate-600">{formatKg(item.outW)} kg</td>
+                      <td className="py-1.5 text-right font-mono font-bold text-blue-600">{item['Thực tế (%)']}%</td>
+                      <td className="py-1.5 text-right font-mono font-bold text-rose-600">{item['Định mức chuẩn (%)']}%</td>
+                      <td className="py-1.5 text-right font-mono font-semibold">
+                        {diff >= 0 ? (
+                          <span className="text-emerald-600">+{diff}% (Đạt chuẩn)</span>
+                        ) : (
+                          <span className="text-rose-600">{diff}% (Vượt hao hụt)</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // =============================================================
+  // RENDER COMPONENT BIỂU ĐỒ 3: CƠ CẤU SẢN PHẨM ĐẦU RA (DONUT)
+  // =============================================================
+  const renderChart3Card = () => {
+    const isExpanded = focusedChart === 'c3';
+
+    return (
+      <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs transition-all ${
+        isExpanded ? 'col-span-full' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+            <h3 className="text-xs font-bold text-slate-900">
+              3) Cơ cấu sản phẩm đầu ra (khối lượng)
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold">
+              Đầu ra Lô {selectedBatch}
+            </span>
+            <ZoomIconButton
+              isExpanded={isExpanded}
+              onToggle={() => setFocusedChart(isExpanded ? null : 'c3')}
+            />
+          </div>
+        </div>
+
+        <div className={`grid grid-cols-1 ${isExpanded ? 'md:grid-cols-2 h-[380px]' : 'sm:grid-cols-2 h-[260px]'} items-center gap-3`}>
+          <div className="w-full h-full relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chart3Data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={isExpanded ? 75 : 55}
+                  outerRadius={isExpanded ? 125 : 85}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {chart3Data.map((_, index) => (
+                    <Cell key={`cell-p-${index}`} fill={PRODUCT_COLORS[index % PRODUCT_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={customTooltipStyle}
+                  formatter={(v: any) => [`${formatKg(Number(v))} kg`, 'Khối lượng']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none text-center px-1">
+              <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wider">
+                Tổng khối lượng SP
+              </span>
+              <span className={`${isExpanded ? 'text-xl' : 'text-base'} font-bold font-mono text-slate-900`}>
+                {formatKg(totalProductKg)}
+              </span>
+              <span className="text-[9px] text-slate-400">kg</span>
+            </div>
+          </div>
+
+          <div className={`flex flex-col gap-1.5 justify-center pr-2 ${isExpanded ? 'max-h-[340px]' : 'max-h-[250px]'} overflow-y-auto`}>
+            {chart3Data.map((item, idx) => {
+              const pct = totalProductKg > 0 ? ((item.value / totalProductKg) * 100).toFixed(1) : '0';
+              return (
+                <div key={item.code} className="flex items-center justify-between text-xs p-1.5 rounded bg-slate-50 border border-slate-100">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: PRODUCT_COLORS[idx % PRODUCT_COLORS.length] }}
+                    />
+                    <span className="text-slate-800 font-medium truncate">
+                      {item.name}
+                    </span>
+                  </div>
+                  <span className="font-mono text-slate-900 font-bold ml-2 shrink-0">
+                    {formatKg(item.value)} kg <span className="text-slate-400 font-normal text-[10px]">({pct}%)</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // =============================================================
+  // RENDER COMPONENT BIỂU ĐỒ 4: BIỂU ĐỒ STACKED COLUMN
+  // =============================================================
+  const renderChart4Card = () => {
+    const isExpanded = focusedChart === 'c4';
+
+    return (
+      <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs transition-all ${
+        isExpanded ? 'col-span-full' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
+            <h3 className="text-xs font-bold text-slate-900">
+              4) Biểu đồ stacked column (kg)
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-slate-400">
+              Đạt chuẩn vs Hàng thải / Phế phẩm
+            </span>
+            <ZoomIconButton
+              isExpanded={isExpanded}
+              onToggle={() => setFocusedChart(isExpanded ? null : 'c4')}
+            />
+          </div>
+        </div>
+
+        <div className={`w-full ${isExpanded ? 'h-[400px]' : 'h-[260px]'}`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chart4Data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
+              <XAxis dataKey="name" stroke="#64748B" fontSize={isExpanded ? 12 : 11} tickLine={false} />
+              <YAxis stroke="#64748B" fontSize={isExpanded ? 12 : 11} tickLine={false} />
+              <Tooltip
+                contentStyle={customTooltipStyle}
+                formatter={(v: any, n: any) => [`${formatKg(Number(v))} kg`, n]}
+                labelFormatter={(label: any) => {
+                  const f = stageWiPList.find(s => s.processId === label);
+                  return `${label} • ${f?.processName || ''}`;
+                }}
+              />
+              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
+              <Bar dataKey="Hàng đạt" stackId="mass" fill="#059669" radius={[0, 0, 0, 0]} maxBarSize={isExpanded ? 34 : 22} />
+              <Bar dataKey="Hàng thải / Phế phẩm" stackId="mass" fill="#94A3B8" radius={[3, 3, 0, 0]} maxBarSize={isExpanded ? 34 : 22} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {isExpanded && (
+          <div className="mt-4 pt-3 border-t border-slate-100 overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="text-slate-500 border-b border-slate-100">
+                  <th className="py-1">Công đoạn</th>
+                  <th className="py-1 text-right text-emerald-600">Hàng đạt chuẩn (kg)</th>
+                  <th className="py-1 text-right text-slate-500">Phế phẩm / Hao hụt (kg)</th>
+                  <th className="py-1 text-right text-slate-900 font-bold">Tổng (kg)</th>
+                  <th className="py-1 text-right">Tỷ lệ đạt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chart4Data.map(item => {
+                  const rate = item.total > 0 ? ((item['Hàng đạt'] / item.total) * 100).toFixed(1) : '0';
+                  return (
+                    <tr key={item.name} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-1.5 font-medium text-slate-800">{item.name} - {item.fullName}</td>
+                      <td className="py-1.5 text-right font-mono font-medium text-emerald-700">{formatKg(item['Hàng đạt'])} kg</td>
+                      <td className="py-1.5 text-right font-mono text-slate-500">{formatKg(item['Hàng thải / Phế phẩm'])} kg</td>
+                      <td className="py-1.5 text-right font-mono font-bold text-slate-900">{formatKg(item.total)} kg</td>
+                      <td className="py-1.5 text-right font-mono font-semibold text-emerald-600">{rate}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // =============================================================
+  // RENDER COMPONENT BIỂU ĐỒ 5: TIẾN ĐỘ TỪNG LÔ
+  // =============================================================
+  const renderChart5Card = () => {
+    const isExpanded = focusedChart === 'c5';
+
+    return (
+      <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs transition-all ${
+        isExpanded ? 'col-span-full' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+            <h3 className="text-xs font-bold text-slate-900">
+              5) Tiến độ từng lô
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-slate-400">
+              X: Khối lượng (kg) • Y: Batch
+            </span>
+            <ZoomIconButton
+              isExpanded={isExpanded}
+              onToggle={() => setFocusedChart(isExpanded ? null : 'c5')}
+            />
+          </div>
+        </div>
+
+        <div className={`w-full ${isExpanded ? 'h-[400px]' : 'h-[280px]'}`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chart5Data}
+              layout="vertical"
+              margin={{ top: 8, right: 12, left: 15, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" horizontal={false} />
+              <XAxis type="number" stroke="#64748B" fontSize={isExpanded ? 12 : 11} tickLine={false} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                stroke="#64748B"
+                fontSize={isExpanded ? 12 : 11}
+                tickLine={false}
+                width={75}
+              />
+              <Tooltip
+                contentStyle={customTooltipStyle}
+                formatter={(v: any, n: any) => [`${formatKg(Number(v))} kg`, n]}
+                labelFormatter={(label: any) => {
+                  const item = chart5Data.find(x => x.name === label);
+                  return `${label} • ${item?.fullName || ''}`;
+                }}
+              />
+              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
+              <Bar dataKey="INPUT" stackId="batch" fill="#2563EB" maxBarSize={isExpanded ? 24 : 18} />
+              <Bar dataKey="OUTPUT" stackId="batch" fill="#059669" maxBarSize={isExpanded ? 24 : 18} />
+              <Bar dataKey="WIP" stackId="batch" fill="#D97706" maxBarSize={isExpanded ? 24 : 18} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Hướng dẫn chọn lô */}
+        <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+          <span>💡 Bấm chọn lô để xem chi tiết 4 biểu đồ:</span>
+          <div className="flex items-center gap-1">
+            {chart5Data.filter(b => b.batchId !== 'NONE').slice(0, 5).map(b => (
+              <button
+                key={b.batchId}
+                type="button"
+                onClick={() => onSelectBatch && onSelectBatch(b.batchId)}
+                className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-mono text-[10px] font-semibold cursor-pointer border border-blue-200/60"
+              >
+                {b.name} →
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // =============================================================
+  // RENDER COMPONENT BIỂU ĐỒ 6: TỔNG QUAN CÁC BATCH (PIE)
+  // =============================================================
+  const renderChart6Card = () => {
+    const isExpanded = focusedChart === 'c6';
+
+    return (
+      <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs transition-all ${
+        isExpanded ? 'col-span-full' : ''
+      }`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+            <h3 className="text-xs font-bold text-slate-900">
+              6) Tổng quan các batch
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold">
+              {chart6Data.length} lô sản xuất
+            </span>
+            <ZoomIconButton
+              isExpanded={isExpanded}
+              onToggle={() => setFocusedChart(isExpanded ? null : 'c6')}
+            />
+          </div>
+        </div>
+
+        <div className={`grid grid-cols-1 ${isExpanded ? 'md:grid-cols-2 h-[380px]' : 'sm:grid-cols-2 h-[280px]'} items-center gap-2`}>
+          <div className="w-full h-full relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chart6Data}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={isExpanded ? 130 : 95}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                  labelLine={false}
+                >
+                  {chart6Data.map((_, index) => (
+                    <Cell key={`cell-b-${index}`} fill={BATCH_COLORS[index % BATCH_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={customTooltipStyle}
+                  formatter={(v: any) => [`${formatKg(Number(v))} kg`, 'Sản lượng']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className={`flex flex-col gap-1.5 justify-center pr-2 ${isExpanded ? 'max-h-[340px]' : 'max-h-[270px]'} overflow-y-auto`}>
+            {chart6Data.map((item, idx) => {
+              const pct = totalBatchKg > 0 ? ((item.value / totalBatchKg) * 100).toFixed(1) : '0';
+              return (
+                <div
+                  key={item.batchId}
+                  onClick={() => onSelectBatch && item.batchId !== 'NONE' && item.batchId !== 'ALL' && onSelectBatch(item.batchId)}
+                  className={`flex items-center justify-between text-xs p-1.5 rounded bg-slate-50 border border-slate-100 transition-colors ${
+                    item.batchId !== 'NONE' && item.batchId !== 'ALL' ? 'hover:bg-blue-50 cursor-pointer' : ''
+                  }`}
+                  title="Bấm để xem 4 biểu đồ chi tiết của lô này"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: BATCH_COLORS[idx % BATCH_COLORS.length] }}
+                    />
+                    <span className="text-slate-800 font-semibold truncate font-mono">
+                      {item.name}
+                    </span>
+                  </div>
+                  <div className="text-right ml-2 shrink-0">
+                    <span className="font-mono text-slate-900 font-bold">
+                      {formatKg(item.value)} kg
+                    </span>
+                    <span className="text-slate-400 text-[10px] ml-1">({pct}%)</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+          <span>Tổng khối lượng toàn xưởng:</span>
+          <strong className="text-slate-900">{formatKg(totalBatchKg)} kg</strong>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-3">
-      {/* THANH ĐIỀU HƯỚNG LỌC BIỂU ĐỒ */}
-      <div className="flex items-center justify-between flex-wrap gap-2 pb-1.5 border-b border-slate-200">
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mr-1">
-            Bộ xem:
-          </span>
+      {/* Nút thu nhỏ khi đang có biểu đồ phóng to */}
+      {focusedChart !== null && (
+        <div className="flex justify-end">
           <button
             type="button"
-            onClick={() => setActiveFilter('all')}
-            className={`px-2.5 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
-              activeFilter === 'all'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
+            onClick={() => setFocusedChart(null)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer transition-colors"
           >
-            Tất cả (8)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('stages')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'stages'
-                ? 'bg-blue-600 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            Công đoạn
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('pie')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'pie'
-                ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            Cân bằng
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('timeline')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'timeline'
-                ? 'bg-indigo-600 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            Theo giờ
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('diff')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'diff'
-                ? 'bg-amber-600 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            Tăng / Hao
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('batches')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'batches'
-                ? 'bg-slate-700 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            Tiến độ Lô
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('cluster')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'cluster'
-                ? 'bg-violet-600 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            4 Phân xưởng
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('rate')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'rate'
-                ? 'bg-cyan-600 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            Năng suất
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter('products')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              activeFilter === 'products'
-                ? 'bg-pink-600 text-white shadow-xs font-bold'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            Sản phẩm
+            <span>⤓ Thu nhỏ (Hiện tất cả biểu đồ)</span>
           </button>
         </div>
+      )}
 
-        <span className="text-[11px] font-mono text-slate-400">
-          Đơn vị: kg
-        </span>
-      </div>
+      {/* ========================================================= */}
+      {/* KHU VỰC 1: PHẦN TỔNG QUÁT (BIỂU ĐỒ 5 & 6)                */}
+      {/* ========================================================= */}
+      {isOverallMode && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+          {isVisible('c5') && renderChart5Card()}
+          {isVisible('c6') && renderChart6Card()}
+        </div>
+      )}
 
-      {/* LƯỚI TẤT CẢ BIỂU ĐỒ - GỌN GÀNG, KHÔNG CHỮ THỪA */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-
-        {/* ---------------- 1. CÔNG ĐOẠN (BAR CHART) ---------------- */}
-        {show('stages') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'stages' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-blue-600" />
-                <h3 className="text-xs font-bold text-slate-800">1. Khối lượng công đoạn</h3>
-              </div>
-              <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-semibold">
-                {barData.length} bước
-              </span>
-            </div>
-
-            <div className="w-full h-[270px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
-                  <XAxis dataKey="name" stroke="#64748B" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} />
-                  <Tooltip
-                    contentStyle={customTooltipStyle}
-                    formatter={(v: any, n: any) => [`${formatKg(Number(v))} kg`, n]}
-                    labelFormatter={(label: any) => {
-                      const f = stageWiPList.find(s => s.processId === label);
-                      return `${label} • ${f?.processName || ''}`;
-                    }}
-                  />
-                  <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
-                  <Bar dataKey="Vào (IN)" fill="#2563EB" radius={[3, 3, 0, 0]} maxBarSize={18} />
-                  <Bar dataKey="Ra (OUT)" fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={18} />
-                  <Bar dataKey="Đọng (WIP)" fill="#D97706" radius={[3, 3, 0, 0]} maxBarSize={18} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- 2. CÂN BẰNG TỔNG THỂ (DONUT) ---------------- */}
-        {show('pie') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'pie' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                <h3 className="text-xs font-bold text-slate-800">2. Cân bằng vật chất</h3>
-              </div>
-              <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded">
-                Thu hồi: {metrics.yieldRate}%
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-2 h-[270px]">
-              <div className="w-full h-full relative flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={88}
-                      paddingAngle={3}
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={customTooltipStyle}
-                      formatter={(v: any) => [`${formatKg(Number(v))} kg`, 'Khối lượng']}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-2xl font-bold font-mono text-slate-900">{metrics.yieldRate}%</span>
-                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Thu hồi</span>
-                </div>
-              </div>
-
-              {/* Chú giải súc tích */}
-              <div className="flex flex-col gap-2 justify-center pr-2">
-                {pieData.map(item => {
-                  const total = metrics.totalInWeight || 1;
-                  const pct = ((item.value / total) * 100).toFixed(1);
-                  return (
-                    <div key={item.name} className="flex items-center justify-between text-xs p-2 rounded bg-slate-50 border border-slate-100">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                        <span className="text-slate-700 font-medium truncate">{item.name}</span>
-                      </div>
-                      <span className="font-mono text-slate-900 font-bold ml-2">
-                        {formatKg(item.value)} kg <span className="text-slate-400 font-normal">({pct}%)</span>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- 3. THEO KHUNG GIỜ (AREA) ---------------- */}
-        {show('timeline') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'timeline' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-600" />
-                <h3 className="text-xs font-bold text-slate-800">3. Sản lượng theo giờ</h3>
-              </div>
-              <span className="text-[10px] font-mono text-slate-400">07:00 - 19:00</span>
-            </div>
-
-            <div className="w-full h-[270px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={timelineData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="areaIn" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="areaOut" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#059669" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
-                  <XAxis dataKey="hour" stroke="#64748B" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} />
-                  <Tooltip contentStyle={customTooltipStyle} formatter={(v: any, n: any) => [`${formatKg(Number(v))} kg`, n]} />
-                  <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
-                  <Area type="monotone" dataKey="Sản lượng vào" stroke="#2563EB" strokeWidth={2} fill="url(#areaIn)" />
-                  <Area type="monotone" dataKey="Sản lượng ra" stroke="#059669" strokeWidth={2} fill="url(#areaOut)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- 4. BIẾN THIÊN: TĂNG TRỌNG & HAO HỤT (DIVERGING BAR) ---------------- */}
-        {show('diff') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'diff' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-600" />
-                <h3 className="text-xs font-bold text-slate-800">4. Tăng trọng (+) & Hao hụt (-)</h3>
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                <span className="text-emerald-700 font-semibold">+ Tăng</span>
-                <span>/</span>
-                <span className="text-rose-600 font-semibold">- Hao</span>
-              </div>
-            </div>
-
-            <div className="w-full h-[270px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={diffData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
-                  <XAxis dataKey="name" stroke="#64748B" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#64748B" fontSize={11} tickLine={false} />
-                  <ReferenceLine y={0} stroke="#475569" strokeWidth={1} />
-                  <Tooltip
-                    contentStyle={customTooltipStyle}
-                    formatter={(v: any) => [`${formatKg(Number(v))} kg`, 'Chênh lệch (OUT - IN)']}
-                    labelFormatter={(label: any) => {
-                      const f = stageWiPList.find(s => s.processId === label);
-                      return `${label} • ${f?.processName || ''}`;
-                    }}
-                  />
-                  <Bar dataKey="diff" maxBarSize={22} radius={[3, 3, 3, 3]}>
-                    {diffData.map((entry, index) => (
-                      <Cell
-                        key={`diff-cell-${index}`}
-                        fill={entry.diff >= 0 ? '#10B981' : '#F43F5E'}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- 5. TIẾN ĐỘ THEO LÔ (HORIZONTAL STACKED BAR) ---------------- */}
-        {show('batches') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'batches' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-slate-700" />
-                <h3 className="text-xs font-bold text-slate-800">5. Tiến độ từng lô</h3>
-              </div>
-              <span className="text-[10px] font-mono text-slate-400">Xếp chồng (kg)</span>
-            </div>
-
-            <div className="w-full h-[270px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={batchData}
-                  layout="vertical"
-                  margin={{ top: 8, right: 8, left: 10, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" horizontal={false} />
-                  <XAxis type="number" stroke="#64748B" fontSize={11} tickLine={false} />
-                  <YAxis type="category" dataKey="name" stroke="#64748B" fontSize={11} tickLine={false} width={70} />
-                  <Tooltip contentStyle={customTooltipStyle} formatter={(v: any, n: any) => [`${formatKg(Number(v))} kg`, n]} />
-                  <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
-                  <Bar dataKey="Thành phẩm (OUT)" stackId="a" fill="#059669" maxBarSize={16} />
-                  <Bar dataKey="Đang làm (WIP)" stackId="a" fill="#D97706" maxBarSize={16} />
-                  <Bar dataKey="Còn lại" stackId="a" fill="#CBD5E1" maxBarSize={16} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- 6. TẢI TRỌNG 4 PHÂN XƯỞNG (RADAR) ---------------- */}
-        {show('cluster') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'cluster' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-violet-600" />
-                <h3 className="text-xs font-bold text-slate-800">6. Tải trọng 4 phân xưởng</h3>
-              </div>
-              <span className="text-[10px] font-mono text-slate-400">Radar</span>
-            </div>
-
-            <div className="w-full h-[270px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart outerRadius={85} data={clusterData}>
-                  <PolarGrid stroke="#E2E8F0" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#475569', fontSize: 11 }} />
-                  <PolarRadiusAxis stroke="#94A3B8" fontSize={9} />
-                  <Tooltip contentStyle={customTooltipStyle} formatter={(v: any) => [`${formatKg(Number(v))} kg`, 'Tải trọng']} />
-                  <Radar name="Khối lượng" dataKey="Tải trọng (kg)" stroke="#7C3AED" fill="#7C3AED" fillOpacity={0.35} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- 7. NĂNG SUẤT & TẦN SUẤT CÂN (COMPOSED CHART) ---------------- */}
-        {show('rate') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'rate' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-600" />
-                <h3 className="text-xs font-bold text-slate-800">7. Tần suất & Năng suất cân</h3>
-              </div>
-              <span className="text-[10px] font-mono text-slate-400">Mẻ & kg/mẻ</span>
-            </div>
-
-            <div className="w-full h-[270px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={rateData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
-                  <XAxis dataKey="hour" stroke="#64748B" fontSize={11} tickLine={false} />
-                  <YAxis yAxisId="left" stroke="#64748B" fontSize={11} tickLine={false} />
-                  <YAxis yAxisId="right" orientation="right" stroke="#64748B" fontSize={11} tickLine={false} />
-                  <Tooltip contentStyle={customTooltipStyle} />
-                  <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', paddingBottom: '6px' }} />
-                  <Bar yAxisId="left" dataKey="Số mẻ cân" fill="#0891B2" radius={[3, 3, 0, 0]} maxBarSize={20} />
-                  <Line yAxisId="right" type="monotone" dataKey="Kg / mẻ" stroke="#EA580C" strokeWidth={2} dot={{ r: 3 }} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- 8. CƠ CẤU THÀNH PHẨM CUỐI (PIE / DONUT) ---------------- */}
-        {show('products') && (
-          <div className={`bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs ${activeFilter === 'products' ? 'lg:col-span-2' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-pink-600" />
-                <h3 className="text-xs font-bold text-slate-800">8. Cơ cấu thành phẩm cuối</h3>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold">
-                Thành phẩm ({productShareData.length})
-              </span>
-            </div>
-
-            {productShareData.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-2 h-[270px]">
-                <div className="w-full h-full relative flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={productShareData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={48}
-                        outerRadius={80}
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
-                        {productShareData.map((_, index) => (
-                          <Cell key={`pcell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={customTooltipStyle} formatter={(v: any) => [`${formatKg(Number(v))} kg`, 'Sản lượng']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Chú giải sản phẩm */}
-                <div className="flex flex-col gap-1.5 justify-center pr-2 max-h-[240px] overflow-y-auto">
-                  {productShareData.map((item, idx) => (
-                    <div key={item.code} className="flex items-center justify-between text-xs p-1.5 rounded bg-slate-50 border border-slate-100">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                        <span className="text-slate-800 truncate font-medium">{item.name}</span>
-                      </div>
-                      <span className="font-mono text-slate-900 font-bold ml-2 shrink-0">
-                        {formatKg(item.value)} kg
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-[270px] text-slate-400 text-xs">
-                <span>Chưa phát sinh mẻ cân thành phẩm xuất xưởng</span>
-              </div>
-            )}
-          </div>
-        )}
-
-      </div>
+      {/* ========================================================= */}
+      {/* KHU VỰC 2: CỦA TỪNG LÔ (BIỂU ĐỒ 1, 2, 3, 4)               */}
+      {/* ========================================================= */}
+      {!isOverallMode && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+          {isVisible('c1') && renderChart1Card()}
+          {isVisible('c2') && renderChart2Card()}
+          {isVisible('c3') && renderChart3Card()}
+          {isVisible('c4') && renderChart4Card()}
+        </div>
+      )}
     </div>
   );
 };

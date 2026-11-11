@@ -232,7 +232,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
           selectedBatch={selectedBatch}
         />
 
-        {/* 4. TRUNG TÂM BIỂU ĐỒ - VẼ ĐA DẠNG 8 BIỂU ĐỒ VỚI CHÚ THÍCH SẮC NÉT */}
+        {/* 4. TRUNG TÂM BIỂU ĐỒ - 6 BIỂU ĐỒ CHUẨN THIẾT KẾ BẢN VẼ */}
         <ProductionVisualCharts
           stageWiPList={stageWiPList}
           metrics={metrics}
@@ -242,6 +242,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
           stations={stations}
           products={products}
           stages={stages}
+          onSelectBatch={setSelectedBatch}
         />
 
         {/* 5. KHỐI QUẢN TRỊ DẠNG BẢNG (MẶC ĐỊNH THU GỌN Ở DƯỚI CÙNG) */}
