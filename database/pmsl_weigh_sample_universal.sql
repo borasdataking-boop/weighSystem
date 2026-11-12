@@ -186,6 +186,7 @@ INSERT INTO public.batch VALUES ('L0002', 'Lô tôm chiên xù EU L0002', 'IN_PR
 INSERT INTO public.batch VALUES ('L0003', 'Lô tôm luộc salad US L0003', 'IN_PROGRESS', '2026-10-28 11:48:10.73745+07');
 INSERT INTO public.batch VALUES ('test', 'Lô kiểm định chất lượng', 'COMPLETED', '2026-10-28 11:48:10.73745+07');
 INSERT INTO public.batch VALUES ('loconc', 'Lô tôm sú hữu cơ', 'COMPLETED', '2026-10-28 11:48:10.73745+07');
+INSERT INTO public.batch VALUES ('L0004', 'Lô tôm sú xuất khẩu US L0004', 'IN_PROGRESS', '2026-11-12 07:00:00+07');
 
 
 --
@@ -298,6 +299,21 @@ INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (33, 'L
 INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (34, 'L0003', '10244180', 'CD011', 'SP-TV-01', 'OUT', 21.800, 1.000, 20.800, '2026-10-06 00:45:00+07', 'NV003', 'TCP/IP');
 INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (35, 'L0002', '10244169', 'CD014', 'SP-IQ-01', 'IN', 31.000, 1.000, 30.000, '2026-10-06 01:00:00+07', 'NV001', 'TCP/IP');
 INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (36, 'L0002', '10244181', 'CD014', 'SP-IQ-01', 'OUT', 30.600, 1.200, 29.400, '2026-10-06 01:40:00+07', 'NV001', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (37, 'L0001', '10244162', 'CD007', 'SP-TB-01', 'IN', 23.000, 1.000, 22.000, '2026-10-05 21:40:00+07', 'NV003', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (38, 'L0001', '10244177', 'CD007', 'SP-TB-01', 'OUT', 31.500, 1.500, 30.000, '2026-10-05 22:20:00+07', 'NV003', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (39, 'L0001', '10244163', 'CD008', 'SP-CN-01', 'OUT', 29.800, 1.300, 28.500, '2026-10-05 23:00:00+07', 'NV002', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (40, 'L0001', '10244168', 'CD013', 'SP-CC-01', 'OUT', 29.000, 1.200, 27.800, '2026-10-06 00:15:00+07', 'NV002', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (41, 'L0001', '10244169', 'CD014', 'SP-IQ-01', 'IN', 34.000, 1.000, 33.000, '2026-10-06 00:45:00+07', 'NV001', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (42, 'L0001', '10244181', 'CD014', 'SP-IQ-01', 'OUT', 33.700, 1.200, 32.500, '2026-10-06 01:30:00+07', 'NV001', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (43, 'L0004', 'CAN001', 'CD001', 'TP001', 'IN', 121.500, 1.500, 120.000, '2026-11-12 07:30:00+07', 'NV001', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (44, 'L0004', '10244157', 'CD002', 'SP-PC-01', 'IN', 119.500, 1.500, 118.000, '2026-11-12 08:15:00+07', 'NV002', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (45, 'L0004', '10244173', 'CD002', 'SP-PC-01', 'OUT', 116.200, 1.200, 115.000, '2026-11-12 08:50:00+07', 'NV002', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (46, 'L0004', '10244159', 'CD004', 'SP-BV-01', 'IN', 116.000, 1.000, 115.000, '2026-11-12 09:15:00+07', 'NV001', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (47, 'L0004', '10244175', 'CD004', 'SP-BV-01', 'OUT', 76.200, 1.200, 75.000, '2026-11-12 10:20:00+07', 'NV001', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (48, 'L0004', '10244160', 'CD005', 'SP-PG-01', 'IN', 76.500, 1.500, 75.000, '2026-11-12 10:45:00+07', 'NV002', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (49, 'L0004', '10244176', 'CD005', 'SP-PG-01', 'OUT', 82.500, 1.500, 81.000, '2026-11-12 11:15:00+07', 'NV002', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (50, 'L0004', '10244169', 'CD014', 'SP-IQ-01', 'IN', 51.000, 1.000, 50.000, '2026-11-12 11:30:00+07', 'NV001', 'TCP/IP');
+INSERT INTO public.production_weight_logs OVERRIDING SYSTEM VALUE VALUES (51, 'L0004', '10244181', 'CD014', 'SP-IQ-01', 'OUT', 50.600, 1.100, 49.500, '2026-11-12 12:00:00+07', 'NV001', 'TCP/IP');
 
 
 --
@@ -337,7 +353,7 @@ INSERT INTO public.station_weigh VALUES ('10244170', 'Trạm cân Cấp đông I
 -- Name: production_weight_logs_log_id_seq; Type: SEQUENCE SET; Schema: public; Owner: phanbach
 --
 
-SELECT pg_catalog.setval('public.production_weight_logs_log_id_seq', 37, true);
+SELECT pg_catalog.setval('public.production_weight_logs_log_id_seq', 52, true);
 
 
 --
