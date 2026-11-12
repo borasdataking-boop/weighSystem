@@ -180,33 +180,32 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Bộ chọn Lô nhỏ gọn */}
-            <div className="flex items-center bg-white border border-slate-200 rounded-md p-0.5 text-[11px]">
-              <button
-                type="button"
-                onClick={() => setSelectedBatch('ALL')}
-                className={`px-2 py-0.5 rounded transition-all cursor-pointer font-medium ${
-                  selectedBatch === 'ALL'
-                    ? 'bg-slate-900 text-white font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+            {/* Bộ chọn Lô dạng danh sách xổ xuống */}
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2.5 py-1 shadow-2xs hover:border-slate-300 transition-colors">
+              <label htmlFor="batch-select" className="text-[11px] font-medium text-slate-500 whitespace-nowrap mr-1.5 flex items-center gap-1 cursor-pointer">
+                <svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+                Lô:
+              </label>
+              <select
+                id="batch-select"
+                value={selectedBatch}
+                onChange={e => setSelectedBatch(e.target.value)}
+                className="text-xs font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer pr-1 py-0.5"
               >
-                Toàn xưởng
-              </button>
-              {batchSummaries.slice(0, 5).map(b => (
-                <button
-                  key={b.batchId}
-                  type="button"
-                  onClick={() => setSelectedBatch(b.batchId)}
-                  className={`px-2 py-0.5 rounded transition-all cursor-pointer font-mono font-medium ${
-                    selectedBatch === b.batchId
-                      ? 'bg-blue-600 text-white font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {b.batchId}
-                </button>
-              ))}
+                <option value="ALL">Toàn xưởng (Tất cả lô)</option>
+                {batchSummaries.map(b => (
+                  <option key={b.batchId} value={b.batchId}>
+                    {b.batchId} {b.batchName ? `• ${b.batchName}` : ''}
+                  </option>
+                ))}
+                {selectedBatch !== 'ALL' && !batchSummaries.some(b => b.batchId === selectedBatch) && (
+                  <option value={selectedBatch}>Lô {selectedBatch}</option>
+                )}
+              </select>
             </div>
 
             {/* Nút mở rộng bảng quản trị lô khi cần */}

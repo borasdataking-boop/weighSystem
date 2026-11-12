@@ -298,7 +298,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
             <h3 className="text-xs font-bold text-slate-900">
-              1) Biểu đồ cột (theo từng công đoạn)
+              Biểu đồ cột (theo từng công đoạn)
             </h3>
           </div>
 
@@ -379,7 +379,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-600" />
             <h3 className="text-xs font-bold text-slate-900">
-              2) Tỷ lệ thành phẩm hao hụt
+              Tỷ lệ thành phẩm hao hụt
             </h3>
           </div>
 
@@ -484,7 +484,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
             <h3 className="text-xs font-bold text-slate-900">
-              3) Cơ cấu sản phẩm đầu ra (khối lượng)
+              Cơ cấu sản phẩm đầu ra (khối lượng)
             </h3>
           </div>
 
@@ -574,7 +574,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
             <h3 className="text-xs font-bold text-slate-900">
-              4) Biểu đồ stacked column (kg)
+              Biểu đồ stacked column (kg)
             </h3>
           </div>
 
@@ -657,7 +657,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
             <h3 className="text-xs font-bold text-slate-900">
-              5) Tiến độ từng lô
+              Tiến độ từng lô
             </h3>
           </div>
 
@@ -707,7 +707,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
 
         {/* Hướng dẫn chọn lô */}
         <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-          <span>💡 Bấm chọn lô để xem chi tiết 4 biểu đồ:</span>
+          <span>💡 Bấm chọn lô để xem biểu đồ chi tiết:</span>
           <div className="flex items-center gap-1">
             {chart5Data.filter(b => b.batchId !== 'NONE').slice(0, 5).map(b => (
               <button
@@ -739,7 +739,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
             <h3 className="text-xs font-bold text-slate-900">
-              6) Tổng quan các batch
+              Tổng quan các batch
             </h3>
           </div>
 
@@ -789,7 +789,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
                   className={`flex items-center justify-between text-xs p-1.5 rounded bg-slate-50 border border-slate-100 transition-colors ${
                     item.batchId !== 'NONE' && item.batchId !== 'ALL' ? 'hover:bg-blue-50 cursor-pointer' : ''
                   }`}
-                  title="Bấm để xem 4 biểu đồ chi tiết của lô này"
+                  title="Bấm để xem biểu đồ chi tiết của lô này"
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span
