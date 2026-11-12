@@ -188,7 +188,48 @@ Bạn sẽ thấy giao diện **Dashboard Hệ Thống Quản Lý Trạm Cân Ph
 
 ---
 
-## 4. Chạy Thử Nghiệm Tại Môi Trường Cục Bộ (Local)
+## 4. Hướng Dẫn Cập Nhật Code Mới (Update Code)
+
+Mỗi khi có mã nguồn mới được đẩy lên GitHub (ví dụ: cập nhật giao diện, sửa lỗi, cập nhật dữ liệu mẫu), bạn chỉ cần mở **Bash Console** trên PythonAnywhere và làm theo **1 trong 2 cách** sau:
+
+### Cách 1: Dùng Script Tự Động 1 Dòng Lệnh (Khuyên dùng - Nhanh nhất)
+Tại cửa sổ **Bash Console** của PythonAnywhere:
+```bash
+cd /home/<username>/webDesignUI
+bash update.sh
+```
+*(Thay `<username>` bằng tên tài khoản của bạn, ví dụ: `cd /home/phanbach/webDesignUI`)*
+
+> **Script `update.sh` đã được cài sẵn trong mã nguồn, tự động xử lý trọn gói 4 khâu:**
+> 1. Kéo toàn bộ code và giao diện build mới nhất từ GitHub (`git fetch & reset --hard origin/main`).
+> 2. Tự động kích hoạt môi trường ảo `weigh_env` và cập nhật các thư viện mới (nếu có).
+> 3. Tự động kiểm tra và đảm bảo Database SQLite sẵn sàng.
+> 4. Tự động khởi động lại Web App (thông qua lệnh `touch` file WSGI) mà **bạn không cần phải mở thẻ Web để bấm Reload thủ công**.
+
+---
+
+### Cách 2: Thực hiện thủ công từng lệnh
+Nếu bạn muốn tự chạy từng lệnh trong Bash Console:
+```bash
+# 1. Di chuyển vào thư mục dự án
+cd /home/<username>/webDesignUI
+
+# 2. Kéo mã nguồn mới nhất từ nhánh main
+git fetch origin main
+git reset --hard origin/main
+
+# 3. Kích hoạt môi trường ảo và cập nhật thư viện
+workon weigh_env
+pip install -r backend/requirements.txt --quiet
+
+# 4. Tự động Reload Web App tức thì từ terminal
+touch /var/www/<username>_pythonanywhere_com_wsgi.py
+```
+*(Sau đó mở lại trang web `https://<username>.pythonanywhere.com` để kiểm tra kết quả)*.
+
+---
+
+## 5. Chạy Thử Nghiệm Tại Môi Trường Cục Bộ (Local)
 
 Nếu muốn chạy thử nghiệm trước trên máy tính cá nhân bằng Python Backend:
 
@@ -206,7 +247,7 @@ Truy cập tại: **`http://localhost:5001`** (Máy chủ sẽ phục vụ cả 
 
 ---
 
-## 5. Khắc Phục Lỗi Thường Gặp (Troubleshooting)
+## 6. Khắc Phục Lỗi Thường Gặp (Troubleshooting)
 
 | Vấn đề | Nguyên nhân | Cách xử lý |
 | :--- | :--- | :--- |
