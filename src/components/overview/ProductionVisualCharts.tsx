@@ -511,6 +511,7 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
                   outerRadius={isExpanded ? 125 : 85}
                   paddingAngle={3}
                   dataKey="value"
+                  isAnimationActive={false}
                 >
                   {chart3Data.map((_, index) => (
                     <Cell key={`cell-p-${index}`} fill={PRODUCT_COLORS[index % PRODUCT_COLORS.length]} />
@@ -764,16 +765,27 @@ export const ProductionVisualCharts: React.FC<ProductionVisualChartsProps> = ({
                   cy="50%"
                   outerRadius={isExpanded ? 130 : 95}
                   dataKey="value"
-                  label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
-                  labelLine={false}
+                  isAnimationActive={false}
                 >
                   {chart6Data.map((_, index) => (
                     <Cell key={`cell-b-${index}`} fill={BATCH_COLORS[index % BATCH_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={customTooltipStyle}
-                  formatter={(v: any) => [`${formatKg(Number(v))} kg`, 'Sản lượng']}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const item = payload[0];
+                      const val = Number(item.value || 0);
+                      const pct = totalBatchKg > 0 ? ((val / totalBatchKg) * 100).toFixed(1) : '0';
+                      return (
+                        <div style={customTooltipStyle} className="text-center font-mono py-1 px-2.5 shadow-lg">
+                          <div className="text-sm font-bold text-emerald-400">{pct}%</div>
+                          <div className="text-[10px] text-slate-300 font-normal">{formatKg(val)} kg</div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>

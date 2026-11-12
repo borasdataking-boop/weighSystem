@@ -82,11 +82,11 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
     loadAllData();
   }, [selectedBatch]);
 
-  // Cập nhật ngầm thời gian thực (Live Polling mỗi 3 giây)
+  // Cập nhật ngầm thời gian thực (Live Polling mỗi 10 giây)
   useEffect(() => {
     const interval = setInterval(() => {
       loadAllData();
-    }, 3000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [selectedBatch]);
 
