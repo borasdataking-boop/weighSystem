@@ -61,49 +61,67 @@ webDesignUI/
 
 ---
 
-## 2. Hướng Dẫn Triển Khai & Khởi Chạy
+## 2. Hướng Dẫn Tải Mã Nguồn & Chạy Thử Nhanh Cho Team
 
-### Cách 1: Triển khai trên PythonAnywhere
+### Bước 0: Lấy mã nguồn mới nhất từ GitHub
+
+- **Nếu máy chưa tải dự án về lần nào (Clone mới):**
+  ```bash
+  git clone https://github.com/borasdataking-boop/weighSystem.git
+  cd weighSystem
+  ```
+- **Nếu máy đã từng clone dự án trước đó (Cập nhật bản mới nhất):**
+  ```bash
+  git pull origin main
+  ```
+
+---
+
+### Cách 1: Chạy thử ngay lập tức với Python (Không cần cài Node hay PostgreSQL)
+Bản build giao diện (`dist/`) và cơ sở dữ liệu mẫu (`database/weigh_dashboard.db`) đã được đóng gói sẵn trong repo. Bạn chỉ cần chạy:
+
+```bash
+# 1. Cài đặt thư viện Python:
+pip install -r backend/requirements.txt
+
+# 2. (Tùy chọn) Làm mới lại dữ liệu mẫu SQLite:
+python3 database/seed_data.py
+
+# 3. Khởi chạy máy chủ (Phục vụ cả API + Giao diện Web):
+python3 backend/app.py
+```
+👉 Mở trình duyệt truy cập ngay: **`http://localhost:5001`**
+
+---
+
+### Cách 2: Chạy chế độ Phát triển Giao diện React (Hot Reload)
+Dành cho thành viên muốn chỉnh sửa code giao diện trong `src/`:
+
+```bash
+# 1. Cài đặt gói thư viện NPM (chỉ cần chạy lần đầu):
+npm install
+
+# 2. Chạy song song Backend API (Terminal 1) và Vite Dev Server (Terminal 2):
+# Terminal 1:
+npm run server
+
+# Terminal 2:
+npm run dev
+```
+👉 Mở trình duyệt truy cập: **`http://localhost:3000`** *(Nếu chỉ chạy `npm run dev` một mình, hệ thống vẫn tự hoạt động bằng dữ liệu lưu trên `localStorage`)*.
+
+---
+
+### Cách 3: Triển khai trên PythonAnywhere
 Xem toàn bộ hướng dẫn từng bước chi tiết tại:  
-👉 **[DEPLOYMENT_PYTHONANYWHERE.md](file:///Users/phanbach/Desktop/TheBaoUser/PhanBachWork/website/weigh_dashboard/webDesignUI/DEPLOYMENT_PYTHONANYWHERE.md)**
+👉 **[DEPLOYMENT_PYTHONANYWHERE.md](./DEPLOYMENT_PYTHONANYWHERE.md)**
 
 Tóm tắt các bước chính:
-1. Git clone mã nguồn vào tài khoản PythonAnywhere.
+1. Git clone mã nguồn vào tài khoản PythonAnywhere: `git clone https://github.com/borasdataking-boop/weighSystem.git`.
 2. Tạo virtualenv và cài đặt: `pip install -r backend/requirements.txt`.
 3. Nạp database mẫu: `python3 database/seed_data.py` (tạo ngay file SQLite không cần cài thêm DB).
 4. Cấu hình thẻ **Web** với file WSGI theo mẫu `backend/pythonanywhere_wsgi.py`.
 5. Nhấn **Reload** và truy cập tên miền `https://<username>.pythonanywhere.com`.
-
----
-
-### Cách 2: Khởi chạy nhanh cục bộ với Python Backend (Khuyên dùng)
-Máy chủ Python Flask tự động phục vụ cả REST API và giao diện tĩnh Vite React:
-
-```bash
-# 1. Cài đặt thư viện Python (nếu chưa cài):
-pip install -r backend/requirements.txt
-
-# 2. Khởi tạo & nạp dữ liệu mẫu vào SQLite:
-python3 database/seed_data.py
-
-# 3. Chạy máy chủ:
-python3 backend/app.py
-```
-Truy cập hệ thống tại: **`http://localhost:5001`**
-
----
-
-### Cách 3: Chế độ Lập trình viên Frontend (Hot Reload React)
-Khi cần chỉnh sửa giao diện giao diện React với Hot Reload tức thì:
-
-```bash
-# Terminal 1: Chạy máy chủ Backend API (cổng 5001)
-npm run server
-
-# Terminal 2: Chạy Vite Development Server (cổng 3000)
-npm run dev
-```
-Truy cập giao diện tại: **`http://localhost:3000`** (Vite tự động chuyển tiếp các yêu cầu `/api/*` sang cổng 5001).
 
 ---
 
