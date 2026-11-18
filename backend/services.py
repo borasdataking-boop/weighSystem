@@ -13,11 +13,12 @@ class DBDataService:
     # 1. QUY TRÌNH & MAPPING
     # ==========================================
     def get_processes(self) -> Dict[str, Any]:
+        active_cond = "is_active = TRUE" if db.is_postgres else "is_active = 1"
         stage_rows = db.query_all(
-            "SELECT * FROM process WHERE is_active = 1 OR is_active = TRUE ORDER BY row_index ASC, col_index ASC, process_id ASC"
+            f"SELECT * FROM process WHERE {active_cond} ORDER BY row_index ASC, col_index ASC, process_id ASC"
         )
         mapping_rows = db.query_all(
-            "SELECT * FROM process_mapping WHERE is_active = 1 OR is_active = TRUE ORDER BY order_index ASC"
+            f"SELECT * FROM process_mapping WHERE {active_cond} ORDER BY order_index ASC"
         )
 
         stages = []
@@ -61,7 +62,7 @@ class DBDataService:
         color_bg = p.get('colorBg', '#FFEEDB')
         color_border = p.get('colorBorder', '#DCA365')
         color_text = p.get('colorText', '#4A2800')
-        is_active = 1 if p.get('isActive', True) else 0
+        is_active = bool(p.get('isActive', True)) if db.is_postgres else (1 if p.get('isActive', True) else 0)
 
         # Kiểm tra tồn tại
         existing = db.query_one("SELECT process_id FROM process WHERE process_id = %s", [p_id])
@@ -124,7 +125,7 @@ class DBDataService:
         indicator_model = s.get('indicatorModel', 'DINI_ARGEO')
         model = s.get('model', 'DINI ARGEO DFWL')
         status = s.get('status', 'ONLINE')
-        is_active = 1 if s.get('isActive', True) else 0
+        is_active = bool(s.get('isActive', True)) if db.is_postgres else (1 if s.get('isActive', True) else 0)
         max_weight = float(s.get('maxWeight') or 150)
         division = float(s.get('division') or 10)
         protocol = s.get('protocol', 'TCP/IP')
@@ -156,45 +157,94 @@ class DBDataService:
         db.execute("DELETE FROM station_weigh WHERE station_id = %s", [station_id])
 
     # ==========================================
-    # 3. SẢN PHẨM (product)
+    # 3. SẢN PHẨM (product & product_stage_mapping)
     # ==========================================
     def _ensure_product_columns(self) -> None:
         if getattr(self, '_product_cols_checked', False):
             return
-        try:
-            db.execute("ALTER TABLE product ADD COLUMN io_type TEXT DEFAULT 'OUT'")
-        except Exception:
-            pass
-        try:
-            db.execute("ALTER TABLE product ADD COLUMN assignments_json TEXT")
-        except Exception:
-            pass
+        if db.is_postgres:
+            sqls = [
+                "ALTER TABLE product ADD COLUMN IF NOT EXISTS io_type VARCHAR(10) DEFAULT 'OUT'",
+                "ALTER TABLE product ADD COLUMN IF NOT EXISTS assignments_json TEXT",
+                """
+                CREATE TABLE IF NOT EXISTS product_stage_mapping (
+                    id SERIAL PRIMARY KEY,
+                    product_id VARCHAR(50) NOT NULL REFERENCES product(product_id) ON DELETE CASCADE,
+                    process_id VARCHAR(50) NOT NULL REFERENCES process(process_id) ON DELETE CASCADE,
+                    io_type VARCHAR(10) NOT NULL CHECK (io_type IN ('IN', 'OUT')),
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(product_id, process_id, io_type)
+                )
+                """
+            ]
+        else:
+            sqls = [
+                "ALTER TABLE product ADD COLUMN io_type TEXT DEFAULT 'OUT'",
+                "ALTER TABLE product ADD COLUMN assignments_json TEXT",
+                """
+                CREATE TABLE IF NOT EXISTS product_stage_mapping (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_id TEXT NOT NULL,
+                    process_id TEXT NOT NULL,
+                    io_type TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(product_id, process_id, io_type)
+                )
+                """
+            ]
+        for sql in sqls:
+            try:
+                db.execute(sql)
+            except Exception:
+                pass
         self._product_cols_checked = True
 
     def get_products(self) -> List[Dict[str, Any]]:
         import json
         self._ensure_product_columns()
         rows = db.query_all("SELECT * FROM product ORDER BY stage_id ASC, product_id ASC")
+
+        # Lấy toàn bộ liên kết N-N từ bảng product_stage_mapping
+        mapping_map: Dict[str, List[Dict[str, str]]] = {}
+        try:
+            mapping_rows = db.query_all(
+                "SELECT product_id, process_id, io_type FROM product_stage_mapping ORDER BY id ASC"
+            )
+            for mr in mapping_rows:
+                pid = str(mr.get('product_id') or '')
+                proc_id = str(mr.get('process_id') or '')
+                io = 'IN' if str(mr.get('io_type') or '').upper() == 'IN' else 'OUT'
+                if pid and proc_id:
+                    mapping_map.setdefault(pid, []).append({'stageId': proc_id, 'ioType': io})
+        except Exception:
+            pass
+
         result = []
         for r in rows:
             p_id = r.get('product_id')
-            stage_id = r.get('stage_id') or 'CD001'
-            io_type = r.get('io_type') or ('IN' if stage_id == 'CD001' and p_id in ('TOM001', 'SP-TN-01') else 'OUT')
-            assignments_raw = r.get('assignments_json')
-            assignments = None
-            if assignments_raw:
-                try:
-                    parsed = json.loads(assignments_raw)
-                    if isinstance(parsed, list):
-                        assignments = parsed
-                except Exception:
-                    assignments = None
+            stage_id = r.get('stage_id') or 'UNASSIGNED'
+            io_type = r.get('io_type') or 'OUT'
+
+            # Ưu tiên lấy từ bảng liên kết product_stage_mapping, fallback sang assignments_json
+            assignments = mapping_map.get(p_id)
+            if assignments is None:
+                assignments_raw = r.get('assignments_json')
+                if assignments_raw:
+                    try:
+                        parsed = json.loads(assignments_raw)
+                        if isinstance(parsed, list):
+                            assignments = parsed
+                    except Exception:
+                        assignments = None
+
+            if assignments is None:
+                assignments = [{'stageId': stage_id, 'ioType': io_type}] if stage_id and stage_id != 'UNASSIGNED' else []
 
             result.append({
                 'id': p_id,
                 'name': r.get('product_name'),
-                'stageId': stage_id,
-                'ioType': io_type,
+                'stageId': assignments[0]['stageId'] if assignments else 'UNASSIGNED',
+                'ioType': assignments[0]['ioType'] if assignments else io_type,
                 'assignments': assignments,
                 'type': r.get('type') or 'SEMI',
                 'unit': r.get('unit') or 'kg',
@@ -242,7 +292,8 @@ class DBDataService:
         p_type = p.get('type', 'SEMI')
         unit = p.get('unit', 'kg')
         spec = p.get('spec', '')
-        is_end = 1 if p.get('isEnd') or p.get('is_end') else 0
+        is_end_flag = bool(p.get('isEnd') or p.get('is_end'))
+        is_end = is_end_flag if db.is_postgres else (1 if is_end_flag else 0)
 
         existing = db.query_one("SELECT product_id FROM product WHERE product_id = %s", [p_id])
         if existing:
@@ -260,7 +311,22 @@ class DBDataService:
             """
             db.execute(sql, [p_id, name, stage_id, io_type, assignments_json, p_type, unit, spec, is_end])
 
+        # Đồng bộ bảng quan hệ N-N product_stage_mapping
+        try:
+            db.execute("DELETE FROM product_stage_mapping WHERE product_id = %s", [p_id])
+            for a in clean_assignments:
+                db.execute(
+                    "INSERT INTO product_stage_mapping (product_id, process_id, io_type) VALUES (%s, %s, %s)",
+                    [p_id, a['stageId'], a['ioType']]
+                )
+        except Exception:
+            pass
+
     def delete_product(self, product_id: str) -> None:
+        try:
+            db.execute("DELETE FROM product_stage_mapping WHERE product_id = %s", [product_id])
+        except Exception:
+            pass
         db.execute("DELETE FROM product WHERE product_id = %s", [product_id])
 
     # ==========================================
@@ -305,11 +371,20 @@ class DBDataService:
         type_weight = input_data.get('type_weight') or (stn.get('io_type', 'IN') if stn else 'IN')
         protocol = stn.get('protocol', 'TCP/IP') if stn else 'TCP/IP'
 
-        # 2. Soft lookup từ product
+        # 2. Soft lookup từ product_stage_mapping & product
         product_id = input_data.get('product_id')
         if not product_id:
-            prod = db.query_one("SELECT product_id FROM product WHERE stage_id = %s LIMIT 1", [process_id])
-            product_id = prod.get('product_id') if prod else 'TOM001'
+            try:
+                prod_map = db.query_one(
+                    "SELECT product_id FROM product_stage_mapping WHERE process_id = %s AND io_type = %s LIMIT 1",
+                    [process_id, type_weight]
+                )
+                product_id = prod_map.get('product_id') if prod_map else None
+            except Exception:
+                product_id = None
+            if not product_id:
+                prod = db.query_one("SELECT product_id FROM product WHERE stage_id = %s LIMIT 1", [process_id])
+                product_id = prod.get('product_id') if prod else 'TOM001'
 
         batch_id = input_data.get('batch_id') or 'L0001'
         employee_id = input_data.get('employee_id')
@@ -454,6 +529,30 @@ class DBDataService:
             'activeBatchesCount': len(unique_batches)
         }
 
+    def _ensure_batch_columns(self) -> None:
+        if getattr(self, '_batch_cols_checked', False):
+            return
+        if db.is_postgres:
+            sqls = [
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS planned_weight NUMERIC(12, 3) DEFAULT 0",
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS start_date VARCHAR(30)",
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS origin VARCHAR(150)",
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS notes TEXT"
+            ]
+        else:
+            sqls = [
+                "ALTER TABLE batch ADD COLUMN planned_weight REAL DEFAULT 0",
+                "ALTER TABLE batch ADD COLUMN start_date TEXT",
+                "ALTER TABLE batch ADD COLUMN origin TEXT",
+                "ALTER TABLE batch ADD COLUMN notes TEXT"
+            ]
+        for sql in sqls:
+            try:
+                db.execute(sql)
+            except Exception:
+                pass
+        self._batch_cols_checked = True
+
     def get_batches(self) -> List[str]:
         sql = """
             SELECT DISTINCT batch_id FROM (
@@ -467,15 +566,70 @@ class DBDataService:
         rows = db.query_all(sql)
         return [r['batch_id'] for r in rows if r.get('batch_id')]
 
-    def create_batch(self, batch_id: str, batch_name: str = '', status: str = 'IN_PROGRESS') -> Dict[str, Any]:
-        sql = "INSERT INTO batch (batch_id, batch_name, status) VALUES (%s, %s, %s)"
-        try:
-            db.execute(sql, (batch_id, batch_name, status))
-        except Exception:
-            pass
-        return {'batch_id': batch_id, 'batch_name': batch_name, 'status': status}
+    def get_batches_details(self) -> List[Dict[str, Any]]:
+        self._ensure_batch_columns()
+        rows = db.query_all("SELECT * FROM batch ORDER BY created_at DESC, batch_id ASC")
+        result = []
+        for r in rows:
+            status = r.get('status') or 'IN_PROGRESS'
+            result.append({
+                'batchId': r.get('batch_id'),
+                'batchName': r.get('batch_name') or f"Lô {r.get('batch_id')}",
+                'plannedWeight': float(r.get('planned_weight') or 0),
+                'startDate': r.get('start_date') or '',
+                'origin': r.get('origin') or '',
+                'status': status,
+                'notes': r.get('notes') or '',
+                'isDeleted': status == 'CANCELLED'
+            })
+        return result
 
-    def update_batch(self, batch_id: str, batch_name: Optional[str] = None, status: Optional[str] = None) -> bool:
+    def create_batch(
+        self,
+        batch_id: str,
+        batch_name: str = '',
+        status: str = 'IN_PROGRESS',
+        planned_weight: float = 0.0,
+        start_date: str = '',
+        origin: str = '',
+        notes: str = ''
+    ) -> Dict[str, Any]:
+        self._ensure_batch_columns()
+        existing = db.query_one("SELECT batch_id FROM batch WHERE batch_id = %s", [batch_id])
+        if existing:
+            self.update_batch(batch_id, batch_name, status, planned_weight, start_date, origin, notes)
+        else:
+            sql = """
+                INSERT INTO batch (batch_id, batch_name, planned_weight, start_date, origin, status, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            try:
+                db.execute(sql, (batch_id, batch_name, float(planned_weight or 0), start_date, origin, status, notes))
+            except Exception:
+                pass
+        return {
+            'batchId': batch_id,
+            'batch_id': batch_id,
+            'batchName': batch_name,
+            'batch_name': batch_name,
+            'plannedWeight': float(planned_weight or 0),
+            'startDate': start_date,
+            'origin': origin,
+            'status': status,
+            'notes': notes
+        }
+
+    def update_batch(
+        self,
+        batch_id: str,
+        batch_name: Optional[str] = None,
+        status: Optional[str] = None,
+        planned_weight: Optional[float] = None,
+        start_date: Optional[str] = None,
+        origin: Optional[str] = None,
+        notes: Optional[str] = None
+    ) -> bool:
+        self._ensure_batch_columns()
         fields = []
         params = []
         if batch_name is not None:
@@ -484,6 +638,18 @@ class DBDataService:
         if status is not None:
             fields.append("status = %s")
             params.append(status)
+        if planned_weight is not None:
+            fields.append("planned_weight = %s")
+            params.append(float(planned_weight))
+        if start_date is not None:
+            fields.append("start_date = %s")
+            params.append(start_date)
+        if origin is not None:
+            fields.append("origin = %s")
+            params.append(origin)
+        if notes is not None:
+            fields.append("notes = %s")
+            params.append(notes)
         if not fields:
             return True
         params.append(batch_id)

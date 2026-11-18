@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS process (
 -- 2. BẢNG PROCESS_MAPPING (Mapping luồng quy trình Node -> Node)
 CREATE TABLE IF NOT EXISTS process_mapping (
     mapping_id TEXT PRIMARY KEY,
-    from_process_id TEXT NOT NULL,
-    to_process_id TEXT NOT NULL,
+    from_process_id TEXT NOT NULL REFERENCES process(process_id) ON DELETE CASCADE,
+    to_process_id TEXT NOT NULL REFERENCES process(process_id) ON DELETE CASCADE,
     transition_type TEXT NOT NULL DEFAULT 'DIRECT',
     description TEXT,
     order_index INTEGER NOT NULL DEFAULT 0,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS station_weigh (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. BẢNG PRODUCT (Danh mục quy cách sản phẩm theo công đoạn)
+-- 4. BẢNG PRODUCT (Danh mục quy cách sản phẩm)
 CREATE TABLE IF NOT EXISTS product (
     product_id TEXT PRIMARY KEY,
     product_name TEXT NOT NULL,
@@ -66,21 +66,35 @@ CREATE TABLE IF NOT EXISTS product (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 4B. BẢNG PRODUCT_STAGE_MAPPING (Liên kết N-N giữa Sản phẩm và Công đoạn Đầu vào IN / Đầu ra OUT)
+CREATE TABLE IF NOT EXISTS product_stage_mapping (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id TEXT NOT NULL REFERENCES product(product_id) ON DELETE CASCADE,
+    process_id TEXT NOT NULL REFERENCES process(process_id) ON DELETE CASCADE,
+    io_type TEXT NOT NULL CHECK (io_type IN ('IN', 'OUT')),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(product_id, process_id, io_type)
+);
+
 -- 5. BẢNG BATCH (Lô sản xuất)
 CREATE TABLE IF NOT EXISTS batch (
     batch_id TEXT PRIMARY KEY,
     batch_name TEXT,
+    planned_weight REAL DEFAULT 0,
+    start_date TEXT,
+    origin TEXT,
     status TEXT DEFAULT 'IN_PROGRESS',
+    notes TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 6. BẢNG PRODUCTION_WEIGHT_LOGS (Nhật ký mẻ cân từ Loadcell/STM32/Dini Argeo)
 CREATE TABLE IF NOT EXISTS production_weight_logs (
     log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    batch_id TEXT NOT NULL,
-    station_id TEXT NOT NULL,
-    process_id TEXT NOT NULL,
-    product_id TEXT NOT NULL,
+    batch_id TEXT NOT NULL REFERENCES batch(batch_id),
+    station_id TEXT NOT NULL REFERENCES station_weigh(station_id),
+    process_id TEXT NOT NULL REFERENCES process(process_id),
+    product_id TEXT NOT NULL REFERENCES product(product_id),
     type_weight TEXT NOT NULL CHECK (type_weight IN ('IN', 'OUT')),
     value_weight REAL NOT NULL,
     tare_weight REAL NOT NULL,
@@ -94,6 +108,9 @@ CREATE TABLE IF NOT EXISTS production_weight_logs (
 CREATE INDEX IF NOT EXISTS idx_logs_batch ON production_weight_logs(batch_id);
 CREATE INDEX IF NOT EXISTS idx_logs_station ON production_weight_logs(station_id);
 CREATE INDEX IF NOT EXISTS idx_logs_process ON production_weight_logs(process_id);
+CREATE INDEX IF NOT EXISTS idx_logs_product ON production_weight_logs(product_id);
 CREATE INDEX IF NOT EXISTS idx_logs_time ON production_weight_logs(time_action);
 CREATE INDEX IF NOT EXISTS idx_stations_process ON station_weigh(process_id);
 CREATE INDEX IF NOT EXISTS idx_product_stage ON product(stage_id);
+CREATE INDEX IF NOT EXISTS idx_psm_product ON product_stage_mapping(product_id);
+CREATE INDEX IF NOT EXISTS idx_psm_process ON product_stage_mapping(process_id, io_type);

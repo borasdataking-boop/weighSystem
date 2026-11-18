@@ -111,9 +111,15 @@ export const WeighStationPage: React.FC<WeighStationPageProps> = ({ onNavigate }
     setStationToDelete(null);
   };
 
-  // Đổi vị trí công đoạn của cân
-  const handleAssignStage = (stationId: string, stageId: string) => {
-    const updated = stationService.assignToProcess(stationId, stageId);
+  // Đổi vị trí công đoạn của cân (Lưu thẳng vào DB)
+  const handleAssignStage = async (stationId: string, stageId: string) => {
+    const target = stations.find(s => (s.id || s.stationId) === stationId);
+    if (!target) return;
+    const updated = await stationService.updateStationInDatabase({
+      ...target,
+      processId: stageId,
+      stageId
+    });
     setStations(updated);
     const stageInfo = stages.find(s => (s.id || s.processId) === stageId);
     showToast(
@@ -122,11 +128,11 @@ export const WeighStationPage: React.FC<WeighStationPageProps> = ({ onNavigate }
     );
   };
 
-  // Đổi nhanh hướng cân IN / OUT
-  const handleQuickChangeIO = (stationId: string, ioType: StationIOType) => {
+  // Đổi nhanh hướng cân IN / OUT (Lưu thẳng vào DB)
+  const handleQuickChangeIO = async (stationId: string, ioType: StationIOType) => {
     const target = stations.find(s => (s.id || s.stationId) === stationId);
     if (!target) return;
-    const updated = stationService.updateStation({
+    const updated = await stationService.updateStationInDatabase({
       ...target,
       ioType,
       typeWeight: ioType

@@ -120,14 +120,26 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleAssignScale = (stationId: string, processId: string) => {
-    const updated = stationService.assignToProcess(stationId, processId);
+  const handleAssignScale = async (stationId: string, processId: string) => {
+    const target = stations.find(s => (s.id || s.stationId) === stationId);
+    if (!target) return;
+    const updated = await stationService.updateStationInDatabase({
+      ...target,
+      processId,
+      stageId: processId
+    });
     setStations(updated);
     addToast('success', 'Điều chuyển thành công', `Đã phân bổ trạm cân ${stationId} vào công đoạn ${processId}.`);
   };
 
-  const handleUnassignScale = (stationId: string) => {
-    const updated = stationService.assignToProcess(stationId, 'UNASSIGNED');
+  const handleUnassignScale = async (stationId: string) => {
+    const target = stations.find(s => (s.id || s.stationId) === stationId);
+    if (!target) return;
+    const updated = await stationService.updateStationInDatabase({
+      ...target,
+      processId: 'UNASSIGNED',
+      stageId: 'UNASSIGNED'
+    });
     setStations(updated);
     addToast('info', 'Đã thu hồi', `Đã chuyển trạm cân ${stationId} về kho dự phòng.`);
   };

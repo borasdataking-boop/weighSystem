@@ -7,11 +7,47 @@ from backend.config import DATABASE_URL, DEFAULT_SQLITE_PATH, BASE_DIR
 
 is_postgres = DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://')
 
-# Kiểm tra và tự động khởi tạo SQLite nếu chưa có file DB
+# Kiểm tra và tự động khởi tạo / cập nhật Schema Database khi khởi động
 if not is_postgres:
     if not DEFAULT_SQLITE_PATH.exists():
         from database.seed_data import seed_sqlite
         seed_sqlite(DEFAULT_SQLITE_PATH)
+else:
+    try:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        # Kiểm tra xem DB đã có bảng process chưa; nếu là DB mới tinh thì tự động chạy init + seed
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'process'
+            );
+        """)
+        has_tables = cur.fetchone()[0]
+        if not has_tables:
+            conn.close()
+            from database.seed_data import seed_postgres
+            seed_postgres(DATABASE_URL)
+        else:
+            # Nếu DB đã có sẵn trên máy: tự động cập nhật schema/cột mới (không ghi đè dữ liệu cũ)
+            init_sql_path = BASE_DIR / 'database' / 'init_db.sql'
+            if init_sql_path.exists():
+                with open(init_sql_path, 'r', encoding='utf-8') as f:
+                    cur.execute(f.read())
+            for alter_sql in [
+                "ALTER TABLE product ADD COLUMN IF NOT EXISTS io_type VARCHAR(10) DEFAULT 'OUT'",
+                "ALTER TABLE product ADD COLUMN IF NOT EXISTS assignments_json TEXT",
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS planned_weight NUMERIC(12, 3) DEFAULT 0",
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS start_date VARCHAR(30)",
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS origin VARCHAR(150)",
+                "ALTER TABLE batch ADD COLUMN IF NOT EXISTS notes TEXT"
+            ]:
+                cur.execute(alter_sql)
+            conn.commit()
+            conn.close()
+    except Exception as _pg_init_err:
+        print(f"⚠️ [PostgreSQL Auto-Check] Không thể tự động kiểm tra schema: {_pg_init_err}")
 
 
 class Database:

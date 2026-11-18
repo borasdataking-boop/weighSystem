@@ -35,7 +35,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         logService.fetchLogs(),
         processService.fetchProcesses(),
         stationService.fetchStations(),
-        productService.fetchProducts()
+        productService.fetchProducts(),
+        logService.fetchBatchesInfo()
       ]);
 
       const stgs = procData.stages || [];

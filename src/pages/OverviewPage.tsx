@@ -60,7 +60,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
         logService.fetchLogs(selectedBatch),
         processService.fetchProcesses(),
         stationService.fetchStations(),
-        productService.fetchProducts()
+        productService.fetchProducts(),
+        logService.fetchBatchesInfo()
       ]);
 
       const stgs = procData.stages || [];

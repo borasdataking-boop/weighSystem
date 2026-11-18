@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
 Python Database Seeder for Weigh Dashboard (PostgreSQL & SQLite)
-Hỗ trợ seed dữ liệu mẫu chuẩn khớp 100% với PostgreSQL PMSL.sql
-Dùng được cả khi chạy local và trên PythonAnywhere
+Hỗ trợ seed dữ liệu mẫu chuẩn khớp 100% giữa tất cả các bảng liên kết:
+process <-> process_mapping <-> station_weigh <-> product <-> product_stage_mapping <-> batch <-> production_weight_logs
 """
 
 import os
 import sys
+import json
 import sqlite3
 from pathlib import Path
 
@@ -52,36 +53,119 @@ PROCESS_MAPPINGS = [
     ('MAP017', 'CD011', 'CD015', 'BRANCH', 'Tách vỏ sau luộc -> Cấp đông IQF tôm chín', 17, True)
 ]
 
+# (batch_id, batch_name, planned_weight, start_date, origin, status, notes)
 BATCHES = [
-    ('L0001', 'Lô tôm thẻ xuất khẩu Nhật Bản L0001', 'IN_PROGRESS'),
-    ('L0002', 'Lô tôm chiên xù EU L0002', 'IN_PROGRESS'),
-    ('L0003', 'Lô tôm luộc salad US L0003', 'IN_PROGRESS'),
-    ('L0004', 'Lô tôm sú xuất khẩu US L0004', 'IN_PROGRESS'),
-    ('test', 'Lô kiểm định chất lượng', 'COMPLETED'),
-    ('loconc', 'Lô tôm sú hữu cơ', 'COMPLETED')
+    ('L0001', 'Lô tôm thẻ xuất khẩu Nhật Bản L0001', 150.0, '2026-10-05', 'Cà Mau - HTX Minh Phú', 'IN_PROGRESS', 'Quy chuẩn cấp đông IQF & Xoắn, độ muối 1.5%'),
+    ('L0002', 'Lô tôm chiên xù EU L0002', 140.0, '2026-10-05', 'Bạc Liêu - Hộ nuôi Năm Căn', 'IN_PROGRESS', 'Size 20-25 con/kg xuất thị trường EU'),
+    ('L0003', 'Lô tôm luộc salad US L0003', 80.0, '2026-10-05', 'Sóc Trăng - Đầm nuôi VietGAP', 'IN_PROGRESS', 'Luộc chín tách vỏ làm salad xuất Mỹ'),
+    ('L0004', 'Lô tôm sú xuất khẩu US L0004', 180.0, '2026-11-12', 'Bến Tre - Vùng nuôi sạch', 'IN_PROGRESS', 'Chế biến xuất khẩu thị trường Mỹ'),
+    ('test', 'Lô kiểm định chất lượng', 50.0, '2026-10-03', 'Nội bộ nhà máy', 'COMPLETED', 'Dùng kiểm thử hệ thống trạm cân IoT'),
+    ('loconc', 'Lô tôm sú hữu cơ', 30.0, '2026-10-05', 'Trà Vinh - Rừng ngập mặn', 'COMPLETED', 'Tôm sú sinh thái tự nhiên')
 ]
 
+# Danh sách sản phẩm kèm cấu hình gán Công đoạn Đầu vào (IN) / Đầu ra (OUT) trực tiếp trong Database
+# (product_id, product_name, stage_id, io_type, assignments_list, type, unit, spec, is_end)
 PRODUCTS = [
-    ('TOM001', 'Tôm nguyên liệu tươi sống', 'CD001', 'SEMI', 'kg', 'Tôm thẻ chân trắng tươi sống nhập từ đầm nuôi', False),
-    ('TP001', 'Tôm nguyên liệu loại 1', 'CD001', 'SEMI', 'kg', 'Tôm đạt chuẩn kích cỡ và độ tươi loại 1', False),
-    ('TP002', 'Tôm nguyên liệu loại 2', 'CD001', 'SEMI', 'kg', 'Tôm đạt chuẩn loại 2 chuyển phân cỡ', False),
-    ('TP003', 'Tôm dập gãy phân loại', 'CD001', 'BYPRODUCT', 'kg', 'Tôm dập gãy, đứt đầu chuyển phụ phẩm', False),
-    ('SP-TN-01', 'Tôm nguyên liệu đạt chuẩn', 'CD001', 'SEMI', 'kg', 'Tôm tươi sống, nguyên con, ướp đá tỷ lệ 1:1', False),
-    ('SP-PC-01', 'Tôm thẻ phân cỡ lớn (size 20-25)', 'CD002', 'SEMI', 'kg', 'Kích cỡ 20-25 con/kg, tôm loại 1', False),
-    ('SP-PC-02', 'Tôm thẻ phân cỡ vừa (size 30-40)', 'CD002', 'SEMI', 'kg', 'Kích cỡ 30-40 con/kg, tôm loại 2', False),
-    ('SP-XK-01', 'Mẻ tôm xếp khuôn 1.8kg', 'CD003', 'SEMI', 'kg', 'Khuôn inox tiêu chuẩn block 1.8kg net', False),
-    ('SP-BV-01', 'Tôm bóc nõn rút chỉ (PD)', 'CD004', 'SEMI', 'kg', 'Bóc sạch vỏ, giữ lại đốt đuôi hoặc bóc nõn hoàn toàn', False),
-    ('SP-PG-01', 'Bán thành phẩm sau ngâm phụ gia', 'CD005', 'SEMI', 'kg', 'Tăng trọng định mức 8-12%, thịt giòn ngọt tự nhiên', False),
-    ('SP-DH-01', 'Tôm Nobashi kéo dài 13-14cm', 'CD006', 'SEMI', 'kg', 'Cắt gân bụng, ép duỗi thẳng', False),
-    ('SP-TB-01', 'Tôm lăn bột xù trắng Panko', 'CD007', 'SEMI', 'kg', 'Bột ướt batter mix bám đều, áo bột xù', False),
-    ('SP-CN-01', 'Tôm chiên chín sơ bộ', 'CD008', 'SEMI', 'kg', 'Chiên ngập dầu đậu nành 180 độ C trong 45 giây', False),
-    ('SP-PD-01', 'Tôm thịt luộc chín PD', 'CD009', 'SEMI', 'kg', 'Luộc hấp nhiệt độ tâm sản phẩm đạt 85 độ C', False),
-    ('SP-HL-01', 'Tôm vỏ luộc chín HLSO', 'CD010', 'SEMI', 'kg', 'Tôm bỏ đầu còn vỏ luộc chín giữ màu đỏ tươi', False),
-    ('SP-TV-01', 'Tôm chín bóc vỏ Salad', 'CD011', 'SEMI', 'kg', 'Bóc vỏ tôm sau luộc làm salad ăn liền', False),
-    ('SP-CX-01', 'Tôm đông xoắn tươi khay', 'CD012', 'FINISHED', 'kg', 'Đông nhiệt độ -40 độ C, đóng thùng carton xuất khẩu', True),
-    ('SP-CC-01', 'Tôm chiên đông xoắn', 'CD013', 'FINISHED', 'kg', 'Cấp đông xoắn giữ độ giòn xốp bột chiên', True),
-    ('SP-IQ-01', 'Tôm thẻ tươi IQF', 'CD014', 'FINISHED', 'kg', 'Cấp đông siêu tốc mạ băng 5% bảo vệ vỏ', True),
-    ('SP-IC-01', 'Tôm chín đông IQF', 'CD015', 'FINISHED', 'kg', 'Đông rời từng con, tiện lợi rã đông sử dụng', True)
+    (
+        'TOM001', 'Tôm nguyên liệu tươi sống', 'CD001', 'IN',
+        [{'stageId': 'CD001', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Tôm thẻ chân trắng tươi sống nhập từ đầm nuôi', False
+    ),
+    (
+        'TP001', 'Tôm nguyên liệu loại 1', 'CD001', 'OUT',
+        [{'stageId': 'CD001', 'ioType': 'IN'}, {'stageId': 'CD001', 'ioType': 'OUT'}, {'stageId': 'CD002', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Tôm đạt chuẩn kích cỡ và độ tươi loại 1', False
+    ),
+    (
+        'TP002', 'Tôm nguyên liệu loại 2', 'CD001', 'OUT',
+        [{'stageId': 'CD001', 'ioType': 'IN'}, {'stageId': 'CD001', 'ioType': 'OUT'}, {'stageId': 'CD002', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Tôm đạt chuẩn loại 2 chuyển phân cỡ', False
+    ),
+    (
+        'TP003', 'Tôm dập gãy phân loại', 'CD001', 'OUT',
+        [{'stageId': 'CD001', 'ioType': 'OUT'}],
+        'BYPRODUCT', 'kg', 'Tôm dập gãy, đứt đầu chuyển phụ phẩm', False
+    ),
+    (
+        'SP-TN-01', 'Tôm nguyên liệu đạt chuẩn', 'CD001', 'OUT',
+        [{'stageId': 'CD001', 'ioType': 'IN'}, {'stageId': 'CD001', 'ioType': 'OUT'}],
+        'SEMI', 'kg', 'Tôm tươi sống, nguyên con, ướp đá tỷ lệ 1:1', False
+    ),
+    (
+        'SP-PC-01', 'Tôm thẻ phân cỡ lớn (size 20-25)', 'CD002', 'OUT',
+        [{'stageId': 'CD002', 'ioType': 'IN'}, {'stageId': 'CD002', 'ioType': 'OUT'}, {'stageId': 'CD003', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Kích cỡ 20-25 con/kg, tôm loại 1', False
+    ),
+    (
+        'SP-PC-02', 'Tôm thẻ phân cỡ vừa (size 30-40)', 'CD002', 'OUT',
+        [{'stageId': 'CD002', 'ioType': 'OUT'}, {'stageId': 'CD003', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Kích cỡ 30-40 con/kg, tôm loại 2', False
+    ),
+    (
+        'SP-XK-01', 'Mẻ tôm xếp khuôn 1.8kg', 'CD003', 'OUT',
+        [{'stageId': 'CD003', 'ioType': 'IN'}, {'stageId': 'CD003', 'ioType': 'OUT'}, {'stageId': 'CD004', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Khuôn inox tiêu chuẩn block 1.8kg net', False
+    ),
+    (
+        'SP-BV-01', 'Tôm bóc nõn rút chỉ (PD)', 'CD004', 'OUT',
+        [{'stageId': 'CD004', 'ioType': 'IN'}, {'stageId': 'CD004', 'ioType': 'OUT'}, {'stageId': 'CD005', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Bóc sạch vỏ, giữ lại đốt đuôi hoặc bóc nõn hoàn toàn', False
+    ),
+    (
+        'SP-PG-01', 'Bán thành phẩm sau ngâm phụ gia', 'CD005', 'OUT',
+        [{'stageId': 'CD005', 'ioType': 'IN'}, {'stageId': 'CD005', 'ioType': 'OUT'}, {'stageId': 'CD006', 'ioType': 'IN'}, {'stageId': 'CD009', 'ioType': 'IN'}, {'stageId': 'CD010', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Tăng trọng định mức 8-12%, thịt giòn ngọt tự nhiên', False
+    ),
+    (
+        'SP-DH-01', 'Tôm Nobashi kéo dài 13-14cm', 'CD006', 'OUT',
+        [{'stageId': 'CD006', 'ioType': 'OUT'}, {'stageId': 'CD007', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Cắt gân bụng, ép duỗi thẳng', False
+    ),
+    (
+        'SP-TB-01', 'Tôm lăn bột xù trắng Panko', 'CD007', 'OUT',
+        [{'stageId': 'CD007', 'ioType': 'IN'}, {'stageId': 'CD007', 'ioType': 'OUT'}, {'stageId': 'CD008', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Bột ướt batter mix bám đều, áo bột xù', False
+    ),
+    (
+        'SP-CN-01', 'Tôm chiên chín sơ bộ', 'CD008', 'OUT',
+        [{'stageId': 'CD008', 'ioType': 'OUT'}, {'stageId': 'CD012', 'ioType': 'IN'}, {'stageId': 'CD013', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Chiên ngập dầu đậu nành 180 độ C trong 45 giây', False
+    ),
+    (
+        'SP-PD-01', 'Tôm thịt luộc chín PD', 'CD009', 'OUT',
+        [{'stageId': 'CD009', 'ioType': 'IN'}, {'stageId': 'CD009', 'ioType': 'OUT'}, {'stageId': 'CD013', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Luộc hấp nhiệt độ tâm sản phẩm đạt 85 độ C', False
+    ),
+    (
+        'SP-HL-01', 'Tôm vỏ luộc chín HLSO', 'CD010', 'OUT',
+        [{'stageId': 'CD010', 'ioType': 'IN'}, {'stageId': 'CD010', 'ioType': 'OUT'}, {'stageId': 'CD011', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Tôm bỏ đầu còn vỏ luộc chín giữ màu đỏ tươi', False
+    ),
+    (
+        'SP-TV-01', 'Tôm chín bóc vỏ Salad', 'CD011', 'OUT',
+        [{'stageId': 'CD011', 'ioType': 'IN'}, {'stageId': 'CD011', 'ioType': 'OUT'}, {'stageId': 'CD014', 'ioType': 'IN'}, {'stageId': 'CD015', 'ioType': 'IN'}],
+        'SEMI', 'kg', 'Bóc vỏ tôm sau luộc làm salad ăn liền', False
+    ),
+    (
+        'SP-CX-01', 'Tôm đông xoắn tươi khay', 'CD012', 'OUT',
+        [{'stageId': 'CD012', 'ioType': 'OUT'}],
+        'FINISHED', 'kg', 'Đông nhiệt độ -40 độ C, đóng thùng carton xuất khẩu', True
+    ),
+    (
+        'SP-CC-01', 'Tôm chiên đông xoắn', 'CD013', 'OUT',
+        [{'stageId': 'CD013', 'ioType': 'OUT'}],
+        'FINISHED', 'kg', 'Cấp đông xoắn giữ độ giòn xốp bột chiên', True
+    ),
+    (
+        'SP-IQ-01', 'Tôm thẻ tươi IQF', 'CD014', 'OUT',
+        [{'stageId': 'CD014', 'ioType': 'IN'}, {'stageId': 'CD014', 'ioType': 'OUT'}],
+        'FINISHED', 'kg', 'Cấp đông siêu tốc mạ băng 5% bảo vệ vỏ', True
+    ),
+    (
+        'SP-IC-01', 'Tôm chín đông IQF', 'CD015', 'OUT',
+        [{'stageId': 'CD015', 'ioType': 'OUT'}],
+        'FINISHED', 'kg', 'Đông rời từng con, tiện lợi rã đông sử dụng', True
+    )
 ]
 
 STATIONS = [
@@ -172,20 +256,35 @@ LOGS = [
     ('L0004', '10244181', 'CD014', 'SP-IQ-01', 'OUT', 50.600, 1.100, 49.500, '2026-11-12T12:00:00.000Z', 'NV001', 'TCP/IP')
 ]
 
+
 def seed_sqlite(db_file: Path):
     """Seed data vào SQLite database"""
     print(f"📦 [SQLite] Đang khởi tạo và nạp dữ liệu vào: {db_file}")
     db_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     conn = sqlite3.connect(db_file)
     cur = conn.cursor()
-    
+
     # 1. Chạy schema init
     init_sql_path = BASE_DIR / 'database' / 'init_sqlite.sql'
     if init_sql_path.exists():
         with open(init_sql_path, 'r', encoding='utf-8') as f:
             cur.executescript(f.read())
-    
+
+    # Đảm bảo các cột mở rộng tồn tại nếu DB đã tạo từ trước
+    for alter_sql in [
+        "ALTER TABLE product ADD COLUMN io_type TEXT DEFAULT 'OUT'",
+        "ALTER TABLE product ADD COLUMN assignments_json TEXT",
+        "ALTER TABLE batch ADD COLUMN planned_weight REAL DEFAULT 0",
+        "ALTER TABLE batch ADD COLUMN start_date TEXT",
+        "ALTER TABLE batch ADD COLUMN origin TEXT",
+        "ALTER TABLE batch ADD COLUMN notes TEXT"
+    ]:
+        try:
+            cur.execute(alter_sql)
+        except Exception:
+            pass
+
     # 2. Seed Process
     for p in PROCESSES:
         cur.execute("""
@@ -206,17 +305,32 @@ def seed_sqlite(db_file: Path):
 
     # 4. Seed Batches
     for b in BATCHES:
-        cur.execute("INSERT OR IGNORE INTO batch (batch_id, batch_name, status) VALUES (?, ?, ?)", b)
+        cur.execute("""
+            INSERT OR REPLACE INTO batch (batch_id, batch_name, planned_weight, start_date, origin, status, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, b)
     print(f"  ✅ Seeded {len(BATCHES)} batches")
 
-    # 5. Seed Products
+    # 5. Seed Products & Product Stage Mappings
+    cur.execute("DELETE FROM product_stage_mapping")
+    mapping_count = 0
     for pr in PRODUCTS:
+        p_id, p_name, stage_id, io_type, assignments, p_type, unit, spec, is_end = pr
+        assignments_json = json.dumps(assignments, ensure_ascii=False)
         cur.execute("""
             INSERT OR REPLACE INTO product 
-            (product_id, product_name, stage_id, type, unit, spec, is_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (pr[0], pr[1], pr[2], pr[3], pr[4], pr[5], 1 if pr[6] else 0))
-    print(f"  ✅ Seeded {len(PRODUCTS)} products")
+            (product_id, product_name, stage_id, io_type, assignments_json, type, unit, spec, is_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (p_id, p_name, stage_id, io_type, assignments_json, p_type, unit, spec, 1 if is_end else 0))
+
+        for a in assignments:
+            cur.execute("""
+                INSERT OR IGNORE INTO product_stage_mapping (product_id, process_id, io_type)
+                VALUES (?, ?, ?)
+            """, (p_id, a['stageId'], a['ioType']))
+            mapping_count += 1
+
+    print(f"  ✅ Seeded {len(PRODUCTS)} products & {mapping_count} stage IN/OUT links")
 
     # 6. Seed Stations
     for s in STATIONS:
@@ -260,6 +374,16 @@ def seed_postgres(database_url: str):
         with open(init_sql_path, 'r', encoding='utf-8') as f:
             cur.execute(f.read())
 
+    for alter_sql in [
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS io_type VARCHAR(10) DEFAULT 'OUT'",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS assignments_json TEXT",
+        "ALTER TABLE batch ADD COLUMN IF NOT EXISTS planned_weight NUMERIC(12, 3) DEFAULT 0",
+        "ALTER TABLE batch ADD COLUMN IF NOT EXISTS start_date VARCHAR(30)",
+        "ALTER TABLE batch ADD COLUMN IF NOT EXISTS origin VARCHAR(150)",
+        "ALTER TABLE batch ADD COLUMN IF NOT EXISTS notes TEXT"
+    ]:
+        cur.execute(alter_sql)
+
     # 2. Seed Process
     for p in PROCESSES:
         cur.execute("""
@@ -288,21 +412,40 @@ def seed_postgres(database_url: str):
     # 4. Seed Batches
     for b in BATCHES:
         cur.execute("""
-            INSERT INTO batch (batch_id, batch_name, status)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (batch_id) DO NOTHING
+            INSERT INTO batch (batch_id, batch_name, planned_weight, start_date, origin, status, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (batch_id) DO UPDATE SET
+              batch_name = EXCLUDED.batch_name,
+              planned_weight = EXCLUDED.planned_weight,
+              start_date = EXCLUDED.start_date,
+              origin = EXCLUDED.origin,
+              status = EXCLUDED.status,
+              notes = EXCLUDED.notes
         """, b)
 
-    # 5. Seed Products
+    # 5. Seed Products & Product Stage Mappings
+    cur.execute("DELETE FROM product_stage_mapping;")
     for pr in PRODUCTS:
+        p_id, p_name, stage_id, io_type, assignments, p_type, unit, spec, is_end = pr
+        assignments_json = json.dumps(assignments, ensure_ascii=False)
         cur.execute("""
-            INSERT INTO product (product_id, product_name, stage_id, type, unit, spec, is_end)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO product (product_id, product_name, stage_id, io_type, assignments_json, type, unit, spec, is_end)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (product_id) DO UPDATE SET
               product_name = EXCLUDED.product_name,
               stage_id = EXCLUDED.stage_id,
-              spec = EXCLUDED.spec
-        """, pr)
+              io_type = EXCLUDED.io_type,
+              assignments_json = EXCLUDED.assignments_json,
+              spec = EXCLUDED.spec,
+              is_end = EXCLUDED.is_end
+        """, (p_id, p_name, stage_id, io_type, assignments_json, p_type, unit, spec, is_end))
+
+        for a in assignments:
+            cur.execute("""
+                INSERT INTO product_stage_mapping (product_id, process_id, io_type)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (product_id, process_id, io_type) DO NOTHING
+            """, (p_id, a['stageId'], a['ioType']))
 
     # 6. Seed Stations
     for s in STATIONS:
@@ -331,13 +474,15 @@ def seed_postgres(database_url: str):
 
 
 def main():
-    db_url = os.getenv('DATABASE_URL', '')
+    from backend.config import DATABASE_URL
+    db_url = DATABASE_URL or os.getenv('DATABASE_URL', '')
     if db_url.startswith('postgres://') or db_url.startswith('postgresql://'):
         seed_postgres(db_url)
     else:
-        # Mặc định dùng SQLite
+        # Fallback SQLite nếu người dùng cấu hình sqlite:///
         db_path = BASE_DIR / 'database' / 'weigh_dashboard.db'
         seed_sqlite(db_path)
+
 
 if __name__ == '__main__':
     main()

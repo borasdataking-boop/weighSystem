@@ -28,6 +28,8 @@ lerna-debug.log*
 .env.*
 !.env.example
 !*.env.example
+db_config.json
+!db_config.example.json
 *.pem
 *.key
 

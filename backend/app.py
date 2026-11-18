@@ -227,6 +227,14 @@ def get_batches():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/batches/details', methods=['GET'])
+def get_batches_details():
+    try:
+        batches = db_data_service.get_batches_details()
+        return jsonify(batches), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/batches', methods=['POST'])
 def create_batch():
     try:
@@ -236,7 +244,13 @@ def create_batch():
             return jsonify({'error': 'batch_id is required'}), 400
         batch_name = data.get('batch_name') or data.get('batchName') or ''
         status = data.get('status') or 'IN_PROGRESS'
-        created = db_data_service.create_batch(batch_id, batch_name, status)
+        planned_weight = float(data.get('planned_weight') or data.get('plannedWeight') or 0)
+        start_date = data.get('start_date') or data.get('startDate') or ''
+        origin = data.get('origin') or ''
+        notes = data.get('notes') or ''
+        created = db_data_service.create_batch(
+            batch_id, batch_name, status, planned_weight, start_date, origin, notes
+        )
         return jsonify(created), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -245,9 +259,21 @@ def create_batch():
 def update_batch(batch_id):
     try:
         data = request.json or {}
-        batch_name = data.get('batch_name') or data.get('batchName')
+        batch_name = data.get('batch_name') if 'batch_name' in data else data.get('batchName')
         status = data.get('status')
-        db_data_service.update_batch(batch_id, batch_name, status)
+        planned_weight = data.get('planned_weight') if 'planned_weight' in data else data.get('plannedWeight')
+        start_date = data.get('start_date') if 'start_date' in data else data.get('startDate')
+        origin = data.get('origin')
+        notes = data.get('notes')
+        db_data_service.update_batch(
+            batch_id,
+            batch_name,
+            status,
+            float(planned_weight) if planned_weight is not None else None,
+            start_date,
+            origin,
+            notes
+        )
         return jsonify({'success': True, 'batch_id': batch_id}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

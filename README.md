@@ -77,17 +77,38 @@ webDesignUI/
 
 ---
 
-### Cách 1: Chạy thử ngay lập tức với Python (Không cần cài Node hay PostgreSQL)
-Bản build giao diện (`dist/`) và cơ sở dữ liệu mẫu (`database/weigh_dashboard.db`) đã được đóng gói sẵn trong repo. Bạn chỉ cần chạy:
+### Bước 1: Kết Nối Link Database PostgreSQL (Config Ngoài Luồng `db_config.json`)
+
+Toàn bộ dữ liệu trên web (Sản phẩm, Công đoạn, Trạm cân, Lô hàng, Mẻ cân) đều được lấy trực tiếp từ **PostgreSQL** (không dùng dữ liệu tĩnh trên Frontend).  
+File cấu hình **`db_config.json`** nằm ngoài luồng Git (đã được thêm vào `.gitignore`), nên khi bạn `git pull` code mới sẽ **không bị ghi đè** thông tin database riêng trên máy bạn.
+
+1. Tạo file `db_config.json` ngay tại thư mục gốc dự án (copy từ file mẫu `db_config.example.json`):
+   ```bash
+   cp db_config.example.json db_config.json
+   ```
+2. Mở file `db_config.json` và dán đường dẫn PostgreSQL có sẵn trên máy của bạn vào:
+   ```json
+   {
+     "DATABASE_URL": "postgresql://<username>:<password>@localhost:5432/<ten_database>"
+   }
+   ```
+   > **Ví dụ:**
+   > - Máy macOS Homebrew (không mật khẩu): `"postgresql://phanbach@localhost:5432/weigh_dashboard"`
+   > - Máy Windows / Linux mặc định user `postgres`: `"postgresql://postgres:123456@localhost:5432/weigh_dashboard"`
+   > - Cloud PostgreSQL (Supabase, Neon, Render...): Dán thẳng chuỗi URI `postgresql://...` của bạn vào.
+
+3. Nạp bảng và dữ liệu mẫu vào PostgreSQL trên máy bạn (hoặc bỏ qua nếu DB đã có sẵn — server sẽ tự kiểm tra & cập nhật các cột/bảng còn thiếu khi khởi động):
+   ```bash
+   pip install -r backend/requirements.txt
+   python3 database/seed_data.py
+   ```
+
+---
+
+### Cách 1: Chạy hệ thống với Python Backend + PostgreSQL (Khuyên dùng)
+Bản build giao diện (`dist/`) đã được đóng gói sẵn trong repo. Sau khi cấu hình `db_config.json`, bạn chỉ cần chạy:
 
 ```bash
-# 1. Cài đặt thư viện Python:
-pip install -r backend/requirements.txt
-
-# 2. (Tùy chọn) Làm mới lại dữ liệu mẫu SQLite:
-python3 database/seed_data.py
-
-# 3. Khởi chạy máy chủ (Phục vụ cả API + Giao diện Web):
 python3 backend/app.py
 ```
 👉 Mở trình duyệt truy cập ngay: **`http://localhost:5001`**
@@ -108,7 +129,7 @@ npm run server
 # Terminal 2:
 npm run dev
 ```
-👉 Mở trình duyệt truy cập: **`http://localhost:3000`** *(Nếu chỉ chạy `npm run dev` một mình, hệ thống vẫn tự hoạt động bằng dữ liệu lưu trên `localStorage`)*.
+👉 Mở trình duyệt truy cập: **`http://localhost:3000`** *(Vite tự động chuyển tiếp `/api/*` sang Backend ở cổng `5001` kết nối PostgreSQL)*.
 
 ---
 
@@ -119,43 +140,30 @@ Xem toàn bộ hướng dẫn từng bước chi tiết tại:
 Tóm tắt các bước chính:
 1. Git clone mã nguồn vào tài khoản PythonAnywhere: `git clone https://github.com/borasdataking-boop/weighSystem.git`.
 2. Tạo virtualenv và cài đặt: `pip install -r backend/requirements.txt`.
-3. Nạp database mẫu: `python3 database/seed_data.py` (tạo ngay file SQLite không cần cài thêm DB).
+3. Tạo file `db_config.json` trỏ vào PostgreSQL hoặc `sqlite:///database/weigh_dashboard.db` rồi chạy `python3 database/seed_data.py`.
 4. Cấu hình thẻ **Web** với file WSGI theo mẫu `backend/pythonanywhere_wsgi.py`.
 5. Nhấn **Reload** và truy cập tên miền `https://<username>.pythonanywhere.com`.
 
 ---
 
 ### Cách 4: Chạy với Node.js Backend & PostgreSQL (Tùy chọn)
-Nếu bạn muốn sử dụng Node.js backend và mở cổng TCP socket cho trạm cân thực tế:
+Nếu bạn muốn sử dụng Node.js backend và mở cổng TCP socket cho trạm cân thực tế (`backend/node/src/db.ts` cũng tự động đọc `db_config.json`):
 
 ```bash
-# 1. Khởi tạo cơ sở dữ liệu PostgreSQL
-npm run db:init
-npm run db:seed
-
-# 2. Build và khởi chạy Node.js Server
 npm run server:node:build
 npm run server:node
 ```
 
 ---
 
-### 2.5. Cơ Chế Kết Nối Cơ Sở Dữ Liệu (PostgreSQL & SQLite)
+### 2.5. Thứ Tự Ưu Tiên Đọc Cấu Hình Database
 
-Hệ thống hỗ trợ chuyển đổi linh hoạt giữa **PostgreSQL** và **SQLite** thông qua biến môi trường `DATABASE_URL` trong file `.env` (xem mẫu tại `.env.example`):
+Hệ thống đọc chuỗi kết nối database theo thứ tự ưu tiên sau:
+1. **`db_config.json`** tại thư mục gốc dự án *(khuyên dùng cho máy cá nhân của từng thành viên, không bị ảnh hưởng bởi Git)*.
+2. **Biến môi trường `DATABASE_URL`** hoặc file **`.env`** (xem mẫu `.env.example`).
+3. **Giá trị mặc định**: `postgresql://phanbach@localhost:5432/weigh_dashboard`.
 
-1. **Chế độ mặc định (Zero-config SQLite):**
-   - Nếu chưa tạo file `.env` hoặc cấu hình `DATABASE_URL=sqlite:///database/weigh_dashboard.db`, Backend Python (`backend/db.py`) tự động đọc/ghi vào file `database/weigh_dashboard.db`.
-   - Phù hợp để chạy thử nghiệm ngay lập tức ở máy cục bộ hoặc triển khai trên **PythonAnywhere Free Tier** mà không cần cài đặt máy chủ DB riêng.
-2. **Chế độ Production với PostgreSQL:**
-   - Tạo file `.env` tại thư mục gốc dự án và khai báo chuỗi kết nối PostgreSQL:
-     ```env
-     DATABASE_URL=postgresql://phanbach@localhost:5432/weigh_dashboard
-     ```
-   - Khi phát hiện tiền tố `postgresql://` hoặc `postgres://`, `backend/db.py` tự động chuyển sang driver `psycopg2` để làm việc trực tiếp với **PostgreSQL**.
-   - Nếu chạy bằng Node.js server (`npm run server:node`), hệ thống kết nối thẳng tới PostgreSQL qua `pg.Pool` (`backend/node/src/db.ts`).
-3. **Chế độ dự phòng trên trình duyệt (LocalStorage Cache):**
-   - Trường hợp chỉ bật giao diện Frontend (`npm run dev`) mà chưa bật Backend API ở cổng `5001`, tầng dịch vụ (`src/services/*.ts`) tự động lưu trữ và đồng bộ dữ liệu trên `localStorage` để không làm gián đoạn thao tác.
+> **Cơ chế tự động cập nhật Schema:** Khi chạy `python3 backend/app.py`, `backend/db.py` tự kiểm tra database PostgreSQL được chỉ định trong `db_config.json`. Nếu database còn trống, hệ thống tự động tạo bảng và nạp dữ liệu chuẩn; nếu database đã có dữ liệu sẵn, hệ thống tự động bổ sung các bảng/cột mới (như `product_stage_mapping`, `planned_weight`...) mà không làm mất dữ liệu cũ.
 
 ---
 
