@@ -3,6 +3,7 @@ import { WeighStationPage } from './pages/WeighStationPage';
 import { ProcessPage } from './pages/ProcessPage';
 import { ProductPage } from './pages/ProductPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { ReportsPage } from './pages/ReportsPage';
 import { Header } from './components/layout/Header';
 
 export const App: React.FC = () => {
@@ -48,7 +49,11 @@ export const App: React.FC = () => {
     return <WeighStationPage onNavigate={handleNavigate} />;
   }
 
-  // Placeholder for other tabs (Tổng quan, Nhân sự, Báo cáo)
+  if (currentTab === 'reports') {
+    return <ReportsPage onNavigate={handleNavigate} />;
+  }
+
+  // Placeholder for other tabs (Nhân sự)
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
       <Header activeTab={currentTab} onTabChange={handleNavigate} />

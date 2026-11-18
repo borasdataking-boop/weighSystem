@@ -145,6 +145,17 @@ def add_product():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/products/<product_id>', methods=['PUT'])
+def update_product(product_id):
+    try:
+        data = request.json or {}
+        data['id'] = product_id
+        db_data_service.add_product(data)
+        products = db_data_service.get_products()
+        return jsonify(products), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/products/<product_id>', methods=['DELETE'])
 def delete_product(product_id):
     try:

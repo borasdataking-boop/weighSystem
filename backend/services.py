@@ -158,25 +158,87 @@ class DBDataService:
     # ==========================================
     # 3. SẢN PHẨM (product)
     # ==========================================
+    def _ensure_product_columns(self) -> None:
+        if getattr(self, '_product_cols_checked', False):
+            return
+        try:
+            db.execute("ALTER TABLE product ADD COLUMN io_type TEXT DEFAULT 'OUT'")
+        except Exception:
+            pass
+        try:
+            db.execute("ALTER TABLE product ADD COLUMN assignments_json TEXT")
+        except Exception:
+            pass
+        self._product_cols_checked = True
+
     def get_products(self) -> List[Dict[str, Any]]:
+        import json
+        self._ensure_product_columns()
         rows = db.query_all("SELECT * FROM product ORDER BY stage_id ASC, product_id ASC")
         result = []
         for r in rows:
+            p_id = r.get('product_id')
+            stage_id = r.get('stage_id') or 'CD001'
+            io_type = r.get('io_type') or ('IN' if stage_id == 'CD001' and p_id in ('TOM001', 'SP-TN-01') else 'OUT')
+            assignments_raw = r.get('assignments_json')
+            assignments = None
+            if assignments_raw:
+                try:
+                    parsed = json.loads(assignments_raw)
+                    if isinstance(parsed, list):
+                        assignments = parsed
+                except Exception:
+                    assignments = None
+
             result.append({
-                'id': r.get('product_id'),
+                'id': p_id,
                 'name': r.get('product_name'),
-                'stageId': r.get('stage_id'),
-                'type': r.get('type'),
-                'unit': r.get('unit'),
-                'spec': r.get('spec'),
+                'stageId': stage_id,
+                'ioType': io_type,
+                'assignments': assignments,
+                'type': r.get('type') or 'SEMI',
+                'unit': r.get('unit') or 'kg',
+                'spec': r.get('spec') or '',
                 'isEnd': bool(r.get('is_end', False))
             })
         return result
 
     def add_product(self, p: Dict[str, Any]) -> None:
+        import json
+        self._ensure_product_columns()
         p_id = p.get('id') or p.get('product_id')
         name = p.get('name') or p.get('product_name')
-        stage_id = p.get('stageId') or p.get('stage_id') or 'CD001'
+        raw_assignments = p.get('assignments')
+        clean_assignments = None
+        if isinstance(raw_assignments, list):
+            clean_assignments = []
+            seen = set()
+            for a in raw_assignments:
+                if not isinstance(a, dict):
+                    continue
+                st_id = str(a.get('stageId') or '').strip()
+                if not st_id or st_id == 'UNASSIGNED':
+                    continue
+                io = 'IN' if str(a.get('ioType') or '').upper() == 'IN' else 'OUT'
+                key = f"{st_id}__{io}"
+                if key not in seen:
+                    seen.add(key)
+                    clean_assignments.append({'stageId': st_id, 'ioType': io})
+
+        if clean_assignments is not None and len(clean_assignments) > 0:
+            stage_id = clean_assignments[0]['stageId']
+            io_type = clean_assignments[0]['ioType']
+        elif clean_assignments is not None and len(clean_assignments) == 0:
+            stage_id = p.get('stageId') or p.get('stage_id') or 'UNASSIGNED'
+            io_type = p.get('ioType') or p.get('io_type') or 'OUT'
+            if stage_id != 'UNASSIGNED':
+                clean_assignments = [{'stageId': stage_id, 'ioType': io_type}]
+        else:
+            stage_id = p.get('stageId') or p.get('stage_id') or 'CD001'
+            io_type = p.get('ioType') or p.get('io_type') or 'OUT'
+            clean_assignments = [{'stageId': stage_id, 'ioType': io_type}] if stage_id != 'UNASSIGNED' else []
+
+        assignments_json = json.dumps(clean_assignments, ensure_ascii=False)
         p_type = p.get('type', 'SEMI')
         unit = p.get('unit', 'kg')
         spec = p.get('spec', '')
@@ -186,16 +248,17 @@ class DBDataService:
         if existing:
             sql = """
                 UPDATE product SET 
-                  product_name = %s, stage_id = %s, type = %s, unit = %s, spec = %s, is_end = %s
+                  product_name = %s, stage_id = %s, io_type = %s, assignments_json = %s,
+                  type = %s, unit = %s, spec = %s, is_end = %s
                 WHERE product_id = %s
             """
-            db.execute(sql, [name, stage_id, p_type, unit, spec, is_end, p_id])
+            db.execute(sql, [name, stage_id, io_type, assignments_json, p_type, unit, spec, is_end, p_id])
         else:
             sql = """
-                INSERT INTO product (product_id, product_name, stage_id, type, unit, spec, is_end)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO product (product_id, product_name, stage_id, io_type, assignments_json, type, unit, spec, is_end)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            db.execute(sql, [p_id, name, stage_id, p_type, unit, spec, is_end])
+            db.execute(sql, [p_id, name, stage_id, io_type, assignments_json, p_type, unit, spec, is_end])
 
     def delete_product(self, product_id: str) -> None:
         db.execute("DELETE FROM product WHERE product_id = %s", [product_id])

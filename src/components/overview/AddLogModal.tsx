@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { WeightIOType } from '../../types/log.types';
 import { ProcessStage } from '../../types/process.types';
 import { StationWeigh } from '../../types/station.types';
 import { ProductItem } from '../../types/product.types';
+import { productService } from '../../services/productService';
 
 interface AddLogModalProps {
   isOpen: boolean;
@@ -43,6 +44,21 @@ export const AddLogModal: React.FC<AddLogModalProps> = ({
   const [tareWeight, setTareWeight] = useState('0.500');
   const [employeeId, setEmployeeId] = useState('NV001');
   const [sourceMethod, setSourceMethod] = useState('TCP/IP');
+
+  const matchingProducts = useMemo(() => {
+    return products.filter(p => productService.isProductAssignedTo(p, processId, typeWeight));
+  }, [products, processId, typeWeight]);
+
+  const otherProducts = useMemo(() => {
+    const matchIds = new Set(matchingProducts.map(p => p.id));
+    return products.filter(p => !matchIds.has(p.id));
+  }, [products, matchingProducts]);
+
+  useEffect(() => {
+    if (matchingProducts.length > 0 && !matchingProducts.some(p => p.id === productId)) {
+      setProductId(matchingProducts[0].id);
+    }
+  }, [processId, typeWeight, matchingProducts]);
 
   if (!isOpen) return null;
 
@@ -219,9 +235,18 @@ export const AddLogModal: React.FC<AddLogModalProps> = ({
                   onChange={e => setProductId(e.target.value)}
                   className="w-full h-9.5 px-3 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#DE4444]"
                 >
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>[{p.id}] {p.name}</option>
-                  ))}
+                  {matchingProducts.length > 0 && (
+                    <optgroup label={`Sản phẩm ${typeWeight === 'IN' ? 'Đầu vào (IN)' : 'Đầu ra (OUT)'} của [${processId}] (${matchingProducts.length})`}>
+                      {matchingProducts.map(p => (
+                        <option key={`match_${p.id}`} value={p.id}>[{p.id}] {p.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label={matchingProducts.length > 0 ? 'Danh mục sản phẩm khác' : 'Tất cả sản phẩm'}>
+                    {(matchingProducts.length > 0 ? otherProducts : products).map(p => (
+                      <option key={`other_${p.id}`} value={p.id}>[{p.id}] {p.name}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 

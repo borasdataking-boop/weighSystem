@@ -893,12 +893,17 @@ export const logService = {
     const assignedIOType = station?.ioType || station?.typeWeight || newLog.type_weight || 'IN';
     const sourceMethod = newLog.source_method || station?.protocol || 'TCP/IP';
 
-    // 3. Tra cứu suy luận từ bảng product
+    // 3. Tra cứu suy luận từ bảng product (ưu tiên khớp cả công đoạn và chiều IN/OUT)
     const products = productService.getProducts();
     let assignedProductId = newLog.product_id;
     if (!assignedProductId || !products.some(p => p.id === assignedProductId)) {
-      const stageProd = products.find(p => p.stageId === assignedProcessId);
-      assignedProductId = stageProd?.id || 'TOM001';
+      const exactStageProd = products.find(p =>
+        productService.isProductAssignedTo(p, assignedProcessId, assignedIOType)
+      );
+      const anyStageProd = products.find(p =>
+        productService.isProductAssignedTo(p, assignedProcessId)
+      );
+      assignedProductId = exactStageProd?.id || anyStageProd?.id || 'TOM001';
     }
 
     // 4. Lấy mã lô hàng
@@ -945,8 +950,13 @@ export const logService = {
 
       let assignedProductId = input.product_id;
       if (!assignedProductId || !products.some(p => p.id === assignedProductId)) {
-        const stageProd = products.find(p => p.stageId === assignedProcessId);
-        assignedProductId = stageProd?.id || 'TOM001';
+        const exactStageProd = products.find(p =>
+          productService.isProductAssignedTo(p, assignedProcessId, assignedIOType)
+        );
+        const anyStageProd = products.find(p =>
+          productService.isProductAssignedTo(p, assignedProcessId)
+        );
+        assignedProductId = exactStageProd?.id || anyStageProd?.id || 'TOM001';
       }
 
       return {

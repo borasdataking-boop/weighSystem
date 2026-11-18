@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS product (
     product_id VARCHAR(50) PRIMARY KEY,
     product_name VARCHAR(100) NOT NULL,
     stage_id VARCHAR(50) NOT NULL,
+    io_type VARCHAR(10) DEFAULT 'OUT',
+    assignments_json TEXT,
     type VARCHAR(30) DEFAULT 'SEMI',
     unit VARCHAR(20) DEFAULT 'kg',
     spec TEXT,

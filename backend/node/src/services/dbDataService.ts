@@ -215,33 +215,74 @@ export const dbDataService = {
   // ==========================================
   // 3. SẢN PHẨM (product)
   // ==========================================
+  async ensureProductColumns(): Promise<void> {
+    try {
+      await pool.query(`ALTER TABLE product ADD COLUMN IF NOT EXISTS io_type VARCHAR(10) DEFAULT 'OUT'`);
+      await pool.query(`ALTER TABLE product ADD COLUMN IF NOT EXISTS assignments_json TEXT`);
+    } catch {
+      // Ignore if columns already exist
+    }
+  },
+
   async getProducts(): Promise<any[]> {
+    await this.ensureProductColumns();
     const res = await pool.query(
       `SELECT * FROM product ORDER BY stage_id ASC, product_id ASC`
     );
-    return res.rows.map(r => ({
-      id: r.product_id,
-      name: r.product_name,
-      stageId: r.stage_id,
-      type: r.type,
-      unit: r.unit,
-      spec: r.spec,
-      isEnd: r.is_end
-    }));
+    return res.rows.map(r => {
+      let assignments = undefined;
+      if (r.assignments_json) {
+        try {
+          const parsed = JSON.parse(r.assignments_json);
+          if (Array.isArray(parsed)) assignments = parsed;
+        } catch {
+          assignments = undefined;
+        }
+      }
+      return {
+        id: r.product_id,
+        name: r.product_name,
+        stageId: r.stage_id,
+        ioType: r.io_type || (r.stage_id === 'CD001' && (r.product_id === 'TOM001' || r.product_id === 'SP-TN-01') ? 'IN' : 'OUT'),
+        assignments,
+        type: r.type,
+        unit: r.unit,
+        spec: r.spec,
+        isEnd: r.is_end
+      };
+    });
   },
 
   async addProduct(p: any): Promise<void> {
+    await this.ensureProductColumns();
+    const assignments = Array.isArray(p.assignments) ? p.assignments : [];
+    const primaryStage = assignments[0]?.stageId || p.stageId || 'CD001';
+    const primaryIo = assignments[0]?.ioType || p.ioType || 'OUT';
+    const assignmentsJson = JSON.stringify(assignments);
+
     await pool.query(
-      `INSERT INTO product (product_id, product_name, stage_id, type, unit, spec, is_end)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO product (product_id, product_name, stage_id, io_type, assignments_json, type, unit, spec, is_end)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (product_id) DO UPDATE SET
          product_name = EXCLUDED.product_name,
          stage_id = EXCLUDED.stage_id,
+         io_type = EXCLUDED.io_type,
+         assignments_json = EXCLUDED.assignments_json,
          type = EXCLUDED.type,
          unit = EXCLUDED.unit,
          spec = EXCLUDED.spec,
          is_end = EXCLUDED.is_end`,
-      [p.id, p.name, p.stageId, p.type || 'SEMI', p.unit || 'kg', p.spec || '', p.isEnd ?? false]
+      [
+        p.id,
+        p.name,
+        primaryStage,
+        primaryIo,
+        assignmentsJson,
+        p.type || 'SEMI',
+        p.unit || 'kg',
+        p.spec || '',
+        p.isEnd ?? false
+      ]
     );
   },
 

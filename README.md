@@ -122,11 +122,30 @@ npm run server:node
 
 ---
 
-## 3. Danh Mục Các Điểm Cuối REST API
+### 2.5. Cơ Chế Kết Nối Cơ Sở Dữ Liệu (PostgreSQL & SQLite)
+
+Hệ thống hỗ trợ chuyển đổi linh hoạt giữa **PostgreSQL** và **SQLite** thông qua biến môi trường `DATABASE_URL` trong file `.env` (xem mẫu tại `.env.example`):
+
+1. **Chế độ mặc định (Zero-config SQLite):**
+   - Nếu chưa tạo file `.env` hoặc cấu hình `DATABASE_URL=sqlite:///database/weigh_dashboard.db`, Backend Python (`backend/db.py`) tự động đọc/ghi vào file `database/weigh_dashboard.db`.
+   - Phù hợp để chạy thử nghiệm ngay lập tức ở máy cục bộ hoặc triển khai trên **PythonAnywhere Free Tier** mà không cần cài đặt máy chủ DB riêng.
+2. **Chế độ Production với PostgreSQL:**
+   - Tạo file `.env` tại thư mục gốc dự án và khai báo chuỗi kết nối PostgreSQL:
+     ```env
+     DATABASE_URL=postgresql://phanbach@localhost:5432/weigh_dashboard
+     ```
+   - Khi phát hiện tiền tố `postgresql://` hoặc `postgres://`, `backend/db.py` tự động chuyển sang driver `psycopg2` để làm việc trực tiếp với **PostgreSQL**.
+   - Nếu chạy bằng Node.js server (`npm run server:node`), hệ thống kết nối thẳng tới PostgreSQL qua `pg.Pool` (`backend/node/src/db.ts`).
+3. **Chế độ dự phòng trên trình duyệt (LocalStorage Cache):**
+   - Trường hợp chỉ bật giao diện Frontend (`npm run dev`) mà chưa bật Backend API ở cổng `5001`, tầng dịch vụ (`src/services/*.ts`) tự động lưu trữ và đồng bộ dữ liệu trên `localStorage` để không làm gián đoạn thao tác.
+
+---
+
+## 3. Danh Mục Các Điểm Cuối REST API & Nghiệp Vụ Quản Lý Sản Phẩm
 
 | Phương thức | Đường dẫn | Chức năng |
 | :--- | :--- | :--- |
-| `GET` | `/api/health` | Kiểm tra tình trạng kết nối DB & số lô hoạt động |
+| `GET` | `/api/health` | Kiểm tra tình trạng kết nối DB (`PostgreSQL` / `SQLite`) & số lô hoạt động |
 | `GET` | `/api/processes` | Lấy danh sách 15 công đoạn & 17 liên kết luồng |
 | `POST` | `/api/processes` | Thêm mới / cập nhật công đoạn |
 | `DELETE` | `/api/processes/:id` | Xóa công đoạn |
@@ -134,13 +153,25 @@ npm run server:node
 | `POST` | `/api/stations` | Thêm mới trạm cân |
 | `PUT` | `/api/stations/:id` | Cập nhật thông số trạm cân |
 | `DELETE` | `/api/stations/:id` | Xóa trạm cân |
-| `GET` | `/api/products` | Lấy danh mục quy cách sản phẩm theo khâu |
+| `GET` | `/api/products` | Lấy danh mục sản phẩm kèm cấu hình phân bổ Đầu vào (`IN`) / Đầu ra (`OUT`) |
+| `POST` | `/api/products` | Thêm mới hoặc cập nhật sản phẩm & danh sách phân bổ công đoạn (`assignments`) |
+| `PUT` | `/api/products/:id` | Cập nhật tên sản phẩm (`Product Name`) và phân bổ Đầu vào / Đầu ra |
+| `DELETE` | `/api/products/:id` | Xóa sản phẩm khỏi danh mục |
 | `GET` | `/api/logs` | Lấy lịch sử mẻ cân (lọc theo `batch_id`) |
 | `POST` | `/api/logs` | Ghi nhận mẻ cân thủ công từ giao diện |
 | `DELETE` | `/api/logs/:id` | Xóa bản ghi mẻ cân |
 | `GET` | `/api/metrics` | Lấy 4 chỉ số KPI chính (IN, WiP, OUT, Yield %) |
 | `GET` | `/api/batches` | Lấy danh sách mã lô sản xuất |
 | `POST` | `/api/iot/weigh` | Tiếp nhận mẻ cân tự động từ chip STM32 / Loadcell |
+
+### 3.1. Nghiệp Vụ Quản Lý Thẻ Sản Phẩm (Product Management)
+Tại màn hình **Sản phẩm (`src/pages/ProductPage.tsx`)**, người vận hành có toàn quyền:
+- **Thêm Product mới:** Khai báo Mã sản phẩm (tự động gợi ý theo công đoạn hoặc tự nhập) và Tên sản phẩm (`Product Name`).
+- **Chỉnh sửa `Product Name`:** Bấm trực tiếp vào tên sản phẩm trên bảng để đổi tên nhanh tại chỗ (Inline Edit) hoặc chỉnh sửa trong hộp thoại chi tiết.
+- **Phân bổ độc lập 2 cột Đầu Vào (`IN`) và Đầu Ra (`OUT`) theo công đoạn (Quan hệ N-N linh hoạt):**
+  - Bảng sản phẩm tách riêng 2 cột **`↓ Đầu Vào (IN)`** và **`↑ Đầu Ra (OUT)`**.
+  - Không ràng buộc cứng 1 sản phẩm chỉ thuộc 1 đầu ra: Một sản phẩm có thể là **Đầu vào (`IN`)** của công đoạn này (VD: *Tôm nguyên liệu tươi sống* ở `CD001`), là **Đầu ra (`OUT`)** của công đoạn khác (VD: *Tôm HLSO* ở `CD010`), hoặc vừa là Đầu ra của công đoạn trước vừa là Đầu vào của công đoạn kế tiếp.
+  - Hỗ trợ 2 góc nhìn trực quan: **Danh sách sản phẩm** (bảng 5 cột cân đối) và **Theo công đoạn (IN / OUT)** (xem từng công đoạn có những sản phẩm nào ở Đầu vào và Đầu ra).
 
 ---
 
