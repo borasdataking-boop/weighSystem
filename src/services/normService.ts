@@ -126,6 +126,33 @@ export interface BottleneckEvaluation {
 
 export const normService = {
   /**
+   * Đồng bộ định mức chuẩn & ngưỡng cảnh báo trực tiếp từ Database (/api/norms)
+   */
+  async fetchNorms(): Promise<void> {
+    try {
+      const res = await fetch('/api/norms');
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof window !== 'undefined') {
+          if (data.globalNorms && Object.keys(data.globalNorms).length > 0) {
+            localStorage.setItem(STORAGE_KEY_GLOBAL, JSON.stringify(data.globalNorms));
+          }
+          if (data.thresholds && Object.keys(data.thresholds).length > 0) {
+            localStorage.setItem(STORAGE_KEY_THRESHOLDS, JSON.stringify(data.thresholds));
+          }
+          if (data.batchNorms && typeof data.batchNorms === 'object') {
+            Object.entries(data.batchNorms).forEach(([batchId, norms]) => {
+              localStorage.setItem(`${STORAGE_KEY_BATCH_PREFIX}${batchId}`, JSON.stringify(norms));
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[normService] Không kết nối được /api/norms, dùng cache:', err);
+    }
+  },
+
+  /**
    * Lấy cấu hình ngưỡng cảnh báo
    */
   getThresholdSettings(): NormThresholdSettings {
@@ -141,7 +168,7 @@ export const normService = {
   },
 
   /**
-   * Lưu cấu hình ngưỡng cảnh báo
+   * Lưu cấu hình ngưỡng cảnh báo (lưu cache + đồng bộ xuống PostgreSQL)
    */
   saveThresholdSettings(settings: NormThresholdSettings): void {
     try {
@@ -149,6 +176,11 @@ export const normService = {
     } catch (e) {
       console.error('Lỗi khi lưu ngưỡng cảnh báo:', e);
     }
+    fetch('/api/norms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scopeKey: 'GLOBAL', thresholds: settings })
+    }).catch(() => {});
   },
 
   /**
@@ -245,12 +277,13 @@ export const normService = {
   },
 
   /**
-   * Lưu hàng loạt toàn bộ định mức cho các công đoạn
+   * Lưu hàng loạt toàn bộ định mức cho các công đoạn (lưu cache + đồng bộ PostgreSQL)
    */
   saveAllTargetNorms(norms: Record<string, number>, batchId?: string): void {
-    if (batchId && batchId !== 'ALL') {
+    const scopeKey = batchId && batchId !== 'ALL' ? batchId : 'GLOBAL';
+    if (scopeKey !== 'GLOBAL') {
       try {
-        localStorage.setItem(`${STORAGE_KEY_BATCH_PREFIX}${batchId}`, JSON.stringify(norms));
+        localStorage.setItem(`${STORAGE_KEY_BATCH_PREFIX}${scopeKey}`, JSON.stringify(norms));
       } catch (e) {
         console.error('Lỗi khi lưu định mức cho lô:', e);
       }
@@ -261,6 +294,11 @@ export const normService = {
         console.error('Lỗi khi lưu định mức toàn nhà máy:', e);
       }
     }
+    fetch('/api/norms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scopeKey, norms })
+    }).catch(() => {});
   },
 
   /**
@@ -282,6 +320,11 @@ export const normService = {
       } catch {
         // Ignore
       }
+      fetch('/api/norms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scopeKey: batchId, deleteScope: true })
+      }).catch(() => {});
     }
   },
 
@@ -295,6 +338,11 @@ export const normService = {
     } catch {
       // Ignore
     }
+    fetch('/api/norms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scopeKey: 'GLOBAL', deleteScope: true })
+    }).catch(() => {});
   },
 
   /**

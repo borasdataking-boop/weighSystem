@@ -288,6 +288,25 @@ def delete_batch(batch_id):
 
 
 # ==========================================
+# 6B. ĐỊNH MỨC CHUẨN & NGƯỠNG CẢNH BÁO (norm_settings)
+# ==========================================
+@app.route('/api/norms', methods=['GET'])
+def get_norms():
+    try:
+        return jsonify(db_data_service.get_norms()), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/norms', methods=['POST'])
+def save_norms():
+    try:
+        updated = db_data_service.save_norms(request.json or {})
+        return jsonify(updated), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==========================================
 # 7. IOT SCALE INGESTION (STM32 & Dini Argeo)
 # ==========================================
 @app.route('/api/iot/weigh', methods=['POST'])

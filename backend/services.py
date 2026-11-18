@@ -673,5 +673,97 @@ class DBDataService:
             pass
         return True
 
+    # ==========================================
+    # 6. ĐỊNH MỨC CHUẨN & NGƯỠNG CẢNH BÁO (norm_settings)
+    # ==========================================
+    def _ensure_norm_table(self) -> None:
+        if getattr(self, '_norm_table_checked', False):
+            return
+        sql = """
+            CREATE TABLE IF NOT EXISTS norm_settings (
+                scope_key VARCHAR(50) PRIMARY KEY,
+                norms_json TEXT NOT NULL DEFAULT '{}',
+                thresholds_json TEXT DEFAULT '{}',
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        """ if db.is_postgres else """
+            CREATE TABLE IF NOT EXISTS norm_settings (
+                scope_key TEXT PRIMARY KEY,
+                norms_json TEXT NOT NULL DEFAULT '{}',
+                thresholds_json TEXT DEFAULT '{}',
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        try:
+            db.execute(sql)
+        except Exception:
+            pass
+        self._norm_table_checked = True
+
+    def get_norms(self) -> Dict[str, Any]:
+        import json
+        self._ensure_norm_table()
+        rows = db.query_all("SELECT scope_key, norms_json, thresholds_json FROM norm_settings")
+        global_norms: Dict[str, Any] = {}
+        batch_norms: Dict[str, Dict[str, Any]] = {}
+        thresholds: Dict[str, Any] = {}
+        for r in rows:
+            key = str(r.get('scope_key') or '')
+            try:
+                norms_val = json.loads(r.get('norms_json') or '{}')
+            except Exception:
+                norms_val = {}
+            try:
+                thresh_val = json.loads(r.get('thresholds_json') or '{}')
+            except Exception:
+                thresh_val = {}
+            if key == 'GLOBAL':
+                if isinstance(norms_val, dict):
+                    global_norms = norms_val
+                if isinstance(thresh_val, dict) and thresh_val:
+                    thresholds = thresh_val
+            elif key:
+                if isinstance(norms_val, dict):
+                    batch_norms[key] = norms_val
+        return {
+            'globalNorms': global_norms,
+            'batchNorms': batch_norms,
+            'thresholds': thresholds
+        }
+
+    def save_norms(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        import json
+        self._ensure_norm_table()
+        scope_key = str(payload.get('scopeKey') or 'GLOBAL').strip() or 'GLOBAL'
+        if payload.get('deleteScope'):
+            db.execute("DELETE FROM norm_settings WHERE scope_key = %s", [scope_key])
+            return self.get_norms()
+
+        norms_json = json.dumps(payload.get('norms') or {}, ensure_ascii=False)
+        thresholds_json = json.dumps(payload.get('thresholds') or {}, ensure_ascii=False)
+        existing = db.query_one("SELECT scope_key FROM norm_settings WHERE scope_key = %s", [scope_key])
+        if existing:
+            if payload.get('norms') is not None and payload.get('thresholds') is not None:
+                db.execute(
+                    "UPDATE norm_settings SET norms_json = %s, thresholds_json = %s WHERE scope_key = %s",
+                    [norms_json, thresholds_json, scope_key]
+                )
+            elif payload.get('norms') is not None:
+                db.execute(
+                    "UPDATE norm_settings SET norms_json = %s WHERE scope_key = %s",
+                    [norms_json, scope_key]
+                )
+            elif payload.get('thresholds') is not None:
+                db.execute(
+                    "UPDATE norm_settings SET thresholds_json = %s WHERE scope_key = %s",
+                    [thresholds_json, scope_key]
+                )
+        else:
+            db.execute(
+                "INSERT INTO norm_settings (scope_key, norms_json, thresholds_json) VALUES (%s, %s, %s)",
+                [scope_key, norms_json, thresholds_json]
+            )
+        return self.get_norms()
+
 
 db_data_service = DBDataService()

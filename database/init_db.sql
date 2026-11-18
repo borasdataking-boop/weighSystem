@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS production_weight_logs (
     source_method VARCHAR(50)
 );
 
+-- 7. BẢNG NORM_SETTINGS (Định mức chuẩn & Ngưỡng cảnh báo theo nhà máy / từng lô)
+CREATE TABLE IF NOT EXISTS norm_settings (
+    scope_key VARCHAR(50) PRIMARY KEY,
+    norms_json TEXT NOT NULL DEFAULT '{}',
+    thresholds_json TEXT DEFAULT '{}',
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 -- INDEXES TĂNG TỐC TRUY VẤN
 CREATE INDEX IF NOT EXISTS idx_logs_batch ON production_weight_logs(batch_id);
 CREATE INDEX IF NOT EXISTS idx_logs_station ON production_weight_logs(station_id);

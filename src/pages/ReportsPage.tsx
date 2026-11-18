@@ -9,6 +9,7 @@ import { logService } from '../services/logService';
 import { processService } from '../services/processService';
 import { stationService } from '../services/stationService';
 import { productService } from '../services/productService';
+import { normService } from '../services/normService';
 
 import { ProductionWeightLog, BatchSummary, StageWiPSummary } from '../types/log.types';
 import { ProcessStage, ProcessMapping } from '../types/process.types';
@@ -36,7 +37,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         processService.fetchProcesses(),
         stationService.fetchStations(),
         productService.fetchProducts(),
-        logService.fetchBatchesInfo()
+        logService.fetchBatchesInfo(),
+        normService.fetchNorms()
       ]);
 
       const stgs = procData.stages || [];
